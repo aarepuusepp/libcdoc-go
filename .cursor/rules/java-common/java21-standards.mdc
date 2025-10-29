@@ -1,0 +1,110 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Java 21 Standards and Best Practices
+
+## Context
+
+- Apply **ONLY** when the project is confirmed to be using Java 21 or later.
+- Supplements the general Java standards defined in `000-java-code-standards.mdc`.
+- Where conflicts exist, these Java 21 standards take precedence.
+
+## Requirements
+
+### Virtual Threads
+- Use virtual threads for I/O-bound or blocking operations where high throughput is needed.
+- Avoid thread-local variables with virtual threads where possible.
+- Do not pool virtual threads.
+
+### Sequenced Collections
+- Use `SequencedCollection`, `SequencedSet`, `SequencedMap` interfaces when a defined encounter order is required.
+- Leverage new methods like `addFirst()`, `addLast()`, `getFirst()`, `getLast()`, `reversed()`.
+
+### Record Patterns (JEP 440)
+- Use record patterns for deconstructing record values concisely (e.g., in `instanceof` checks).
+- Combine record patterns with type patterns.
+
+### Pattern Matching for switch (JEP 441)
+- Use pattern matching in `switch` statements and expressions for cleaner type checking and casting.
+- Handle `null` cases explicitly in `switch` patterns.
+- Ensure `switch` expressions cover all possible input values (use `default` or ensure exhaustive patterns).
+
+### Other Java 17+ Features (Implicitly Recommended)
+- **Records:** Use for immutable data carriers instead of traditional POJOs where appropriate.
+- **Sealed Classes/Interfaces:** Use to control implementation hierarchies.
+- **Pattern Matching for `instanceof`:** Prefer over traditional `instanceof` and cast.
+- **Text Blocks:** Use for multi-line strings (SQL, JSON, etc.).
+- **`var`:** Use for local variable type inference where it enhances readability without obscuring the type.
+
+## Examples
+
+<example>
+Using Virtual Threads:
+```java
+try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+    executor.submit(() -> System.out.println("Running in virtual thread"));
+    // ... submit more tasks
+}
+```
+</example>
+
+<example>
+Using SequencedCollection:
+```java
+SequencedSet<String> set = new LinkedHashSet<>();
+set.addLast("A");
+set.addFirst("B");
+String first = set.getFirst(); // "B"
+for (String s : set.reversed()) {
+   // Iterates C, B, A (if C was added last)
+}
+```
+</example>
+
+<example>
+Using Record Patterns:
+```java
+record Point(int x, int y) {}
+
+void printPoint(Object obj) {
+    if (obj instanceof Point(int x, int y)) {
+        System.out.println("Point coordinates: " + x + ", " + y);
+    }
+}
+```
+</example>
+
+<example type="invalid">
+Not handling null in switch pattern:
+```java
+// Assumes typeTester returns a String or Integer
+static int coverage(Object obj) {
+    return switch (obj) {         // Error! Should handle null
+        case String s  -> s.length();
+        case Integer i -> i;
+        default -> 0;
+    };
+}
+```
+Corrected with null handling:
+```java
+static int coverage(Object obj) {
+    return switch (obj) {
+        case null      -> 0; // Handle null explicitly
+        case String s  -> s.length();
+        case Integer i -> i;
+        default -> 0;
+    };
+}
+
+```
+</example>
+
+
+## Critical Rules
+- **Verify Java Version:** Always confirm the project uses Java 21+ before applying these rules.
+- **Prefer Modern Features:** Actively look for opportunities to use Java 21 features (Records, Pattern Matching, Virtual Threads, etc.) where appropriate.
+- **Consult Base Standards:** Refer to `000-java-code-standards.mdc` for general Java standards not covered here. 

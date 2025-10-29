@@ -1,0 +1,133 @@
+---
+description: 
+globs: **/*.java
+alwaysApply: false
+---
+# Micronaut Database Retry Conventions
+
+## Context
+- Apply when implementing database access within service classes in a Micronaut project that requires retry capabilities.
+- Relies on `micronaut-retry` module and the `@Retryable` annotation.
+- Assumes PostgreSQL database and the need to retry specific failover/read-only errors.
+- For core jOOQ DSL usage, see `.cursor/rules/java/database/jooq-database-access.mdc`.
+- Transaction management is handled by Micronaut (`jakarta.transaction.Transactional` or Micronaut Data specific annotations).
+- For auditing conventions, see `.cursor/rules/java-common/audit-logging-conventions.mdc`.
+
+## Requirements
+- **Annotation:** Database operations (reads/writes) requiring retry MUST be annotated with `@io.micronaut.retry.annotation.Retryable`. Annotate the public service method containing the database logic.
+- **Configuration:** Retry behavior (attempts, delay, multiplier) SHOULD be configured in `application.yml` under a dedicated prefix (e.g., `database.retry.*`) and referenced in the `@Retryable` annotation using property placeholders (`${database.retry.max-attempts}`).
+- **Retryable Exceptions:**
+    - The `@Retryable` annotation's `value()` or `includes()` attribute MUST list general transient exceptions like `org.jooq.exception.DataAccessException` or `java.sql.SQLRecoverableException`.
+    - **Read-Only / Failover Handling:** To handle specific PostgreSQL read-only (`SQLState '25006'`) or failover (`'08xxx'`, `'57Pxx'`) errors, the `@Retryable` annotation MUST include:
+        - `retryOn = {..., org.postgresql.util.PSQLException.class}` (or `java.sql.SQLException.class`)
+        - `retryForExpression = "'25006'.equals(exception.getSQLState()) || exception.getSQLState().startsWith('08') || exception.getSQLState().startsWith('57P')"` (Adjust expression based on actual base exception class used in `retryOn`).
+- **Connection Handling:** Connection acquisition and release are managed by Micronaut's transaction management; retries operate within this context. Ensure transaction configuration allows for retries (e.g., appropriate transaction propagation). Recoverable exceptions typically lead to the connection being discarded by the pool upon return to the transaction manager.
+
+## Examples
+<example>
+  # Good: Using @Retryable on a Service Method
+  ```java
+  import io.micronaut.retry.annotation.Retryable;
+  import jakarta.inject.Singleton;
+  import jakarta.transaction.Transactional;
+  import org.jooq.DSLContext;
+  import org.jooq.exception.DataAccessException; // General jOOQ exception
+  import org.postgresql.util.PSQLException; // Specific PG exception for SQLState check
+  import java.sql.SQLRecoverableException;
+  // ... other imports ...
+
+  @Singleton
+  public class MicronautBookService {
+
+      private final DSLContext dsl;
+      // ... constructor injection ...
+
+      @Transactional(Transactional.TxType.SUPPORTS) // Or other appropriate Tx annotation
+      @Retryable(
+          attempts = "${database.retry.max-attempts:3}",
+          delay = "${database.retry.delay:500ms}",
+          multiplier = "${database.retry.multiplier:2.0}",
+          maxDelay = "${database.retry.max-interval:10s}",
+          includes = { DataAccessException.class, SQLRecoverableException.class }, // General transient exceptions
+          retryOn = { PSQLException.class }, // Add specific exception for expression check
+          retryForExpression = // Check specific SQLStates for read-only/failover
+              "'25006'.equals(exception.getSQLState()) || " +
+              "exception.getSQLState().startsWith('08') || " +
+              "exception.getSQLState().startsWith('57P')"
+      )
+      public Optional<BookResponse> findBookById(UUID id) {
+          log.info("Finding book with ID: {}", id); // Logging still happens
+
+          // Direct jOOQ call - Micronaut AOP wraps this method call
+          Optional<BookResponse> book = dsl.selectFrom(BOOK)
+              .where(BOOK.ID.eq(id))
+              .fetchOptional()
+              .map(this::mapToBookResponse);
+
+          // Auditing logic (see rule audit-logging-conventions.mdc)
+          if (book.isPresent()) {
+              AuditLogger.logBookAccessed(id, book.get().getTitle(), "BY_ID");
+          }
+          return book;
+      }
+
+      // ... other methods annotated with @Retryable as needed ...
+      private BookResponse mapToBookResponse(BookRecord record) { /* ... */ }
+  }
+  ```
+</example>
+
+<example type="invalid">
+  # Bad: Missing @Retryable or Incorrect Configuration
+  ```java
+  @Singleton
+  public class MicronautBookService {
+      // ... constructor ...
+
+      @Transactional(Transactional.TxType.SUPPORTS)
+      // Missing @Retryable annotation - no retry will occur
+      public Optional<BookResponse> findBookById(UUID id) {
+           Optional<BookResponse> book = dsl.selectFrom(BOOK)
+               .where(BOOK.ID.eq(id))
+               .fetchOptional()
+               .map(this::mapToBookResponse);
+           // ... auditing ...
+           return book;
+      }
+
+      @Transactional(Transactional.TxType.SUPPORTS)
+      @Retryable( // Missing specific check for read-only/failover SQLStates
+           includes = { DataAccessException.class }
+      )
+      public void updateBook(...) {
+          // This might retry general DataAccessExceptions but not the specific read-only error
+          // ... dsl update call ...
+      }
+  }
+  ```
+</example>
+
+<example>
+ # Good: Corresponding application.yml Configuration
+ ```yaml
+ database:
+   retry:
+     max-attempts: 4       # Example: Override default
+     delay: 750ms          # Example: Override default
+     multiplier: 1.5       # Example: Override default
+     max-interval: 15s     # Example: Override default
+ # Optional: Configure specific retryable exceptions globally if desired
+ # micronaut:
+ #   retry:
+ #     exceptions:
+ #       - org.jooq.exception.DataAccessException
+ #       - java.sql.SQLRecoverableException
+ ```
+</example>
+
+## Critical Rules
+  - ALWAYS apply `@Retryable` to service methods performing database operations that need retries.
+  - ALWAYS configure `@Retryable` to include general transient exceptions (`DataAccessException`, `SQLRecoverableException`).
+  - ALWAYS configure `@Retryable` with `retryOn` and `retryForExpression` to explicitly catch specific read-only/failover SQLStates ('25006', '08xxx', '57Pxx') via `PSQLException` or `SQLException`.
+  - PREFER configuring retry parameters (attempts, delay) via `application.yml` and referencing them in `@Retryable`.
+  - Rely on Micronaut's transaction management for connection handling during retries.

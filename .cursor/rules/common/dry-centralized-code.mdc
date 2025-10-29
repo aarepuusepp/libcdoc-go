@@ -1,0 +1,285 @@
+---
+description: ALWAYS apply DRY principle and centralized code organization to eliminate duplicate logic
+globs: src/**/*.java, src/**/*.js, src/**/*.ts, src/**/*.tsx
+alwaysApply: true
+---
+
+# DRY Principle & Centralized Code Standards
+
+## Context
+
+- Apply when writing, reviewing, or refactoring any code
+- When identifying duplicate logic patterns across multiple classes or methods
+- When creating new functionality that might be similar to existing code
+- During code reviews to ensure adherence to DRY principles
+- When designing utility classes and helper methods
+
+## Requirements
+
+### DRY (Don't Repeat Yourself) Principle
+- **NEVER** duplicate similar logic across multiple classes, methods, or modules
+- **ALWAYS** extract common functionality into centralized utilities, helper classes, or base classes
+- **IDENTIFY** code patterns that appear 2+ times and consolidate them
+- **REFACTOR** existing duplicate code when encountered during development
+- **USE** inheritance, composition, or utility classes to share common behavior
+
+### Centralized Code Organization
+- **CREATE** utility classes for common operations (validation, formatting, conversion, etc.)
+- **USE** helper classes with static methods for stateless operations
+- **IMPLEMENT** base classes for shared behavior across similar components
+- **ORGANIZE** related functionality into cohesive packages and modules
+- **ESTABLISH** single sources of truth for business logic, validation rules, and configuration
+
+### Code Consolidation Strategies
+- **Utility Classes**: For stateless operations (e.g., `ValidationHelper`, `FormatUtils`, `ConversionUtil`)
+- **Service Abstractions**: For shared business logic across similar services
+- **Base Classes**: For common patterns in controllers, services, or entities
+- **Constants Classes**: For shared constants, enums, and configuration values
+- **Helper Methods**: For repeated operations within a single class
+
+## Examples
+
+<example>
+# Good: Centralized Validation Helper
+```java
+// Single utility class handling all container validation
+public class ContainerValidationHelper {
+    public static SignResult validateContainer(
+        byte[] signedContainer,
+        Boolean shouldValidate,
+        String filename,
+        String regCode,
+        UserInfo userInfo,
+        Container.DocumentType documentType,
+        ValidateService validateService,
+        Oauth2TokenInfo tokenInfo) {
+        
+        if (shouldValidate == null || !shouldValidate) {
+            return new SignResult(signedContainer);
+        }
+        
+        try {
+            boolean isValid = validateService.isContainerValid(/*...params...*/);
+            return new SignResult(signedContainer, isValid, isValid ? null : "Validation failed");
+        } catch (Exception e) {
+            return new SignResult(signedContainer, false, "Validation error: " + e.getMessage());
+        }
+    }
+}
+
+// All services use the centralized method
+public class MobileIdService {
+    public SignResult getSignedContainer(...) {
+        // ... signing logic ...
+        return ContainerValidationHelper.validateContainer(/*...params...*/);
+    }
+}
+```
+*Explanation: Single validation method shared across all signing services instead of duplicating validation logic.*
+</example>
+
+<example type="invalid">
+# Bad: Duplicate Validation Logic
+```java
+// IdCard Service - duplicate validation logic
+public class IdCardService {
+    public IdCardSignResult signWithValidation(...) {
+        // ... signing logic ...
+        if (validate == null || !validate) {
+            return new IdCardSignResult(bytes);
+        }
+        try {
+            boolean isValid = validateService.isContainerValid(/*...*/);
+            if (isValid) {
+                return new IdCardSignResult(bytes, true, null);
+            } else {
+                return new IdCardSignResult(bytes, false, "Validation failed");
+            }
+        } catch (Exception e) {
+            return new IdCardSignResult(bytes, false, "Validation error: " + e.getMessage());
+        }
+    }
+}
+
+// Mobile-ID Service - DUPLICATE validation logic (20+ identical lines)
+public class MobileIdService {
+    public SignResult getSignedContainer(...) {
+        // ... signing logic ...
+        if (request.getValidate() == null || !request.getValidate()) {
+            return new SignResult(signedContainer);
+        }
+        try {
+            boolean isValid = validateService.isContainerValid(/*...*/);
+            if (isValid) {
+                return new SignResult(signedContainer, true, null);
+            } else {
+                return new SignResult(signedContainer, false, "Validation failed");
+            }
+        } catch (Exception e) {
+            return new SignResult(signedContainer, false, "Validation error: " + e.getMessage());
+        }
+    }
+}
+
+// Smart-ID Service - DUPLICATE validation logic (20+ identical lines)
+// E-Stamp Service - DUPLICATE validation logic (20+ identical lines)
+```
+*Explanation: Identical validation logic repeated across 4+ services violates DRY principle.*
+</example>
+
+<example>
+# Good: Centralized Constants and Configuration
+```java
+// Single source of truth for validation constants
+public final class ValidationConstants {
+    public static final boolean DEFAULT_FROM_CACHE = false;
+    public static final boolean DEFAULT_VALIDATE_FLAG = true;
+    public static final String DEFAULT_SOCIAL_SEC_NR = null;
+    
+    public static final String VALIDATION_SUCCESS_MESSAGE = "Container validated successfully";
+    public static final String VALIDATION_FAILED_MESSAGE = "Container validation failed";
+    public static final String VALIDATION_ERROR_PREFIX = "Validation service error: ";
+    
+    private ValidationConstants() {} // Prevent instantiation
+}
+
+// Centralized file extension utilities
+public final class FileExtensionUtils {
+    public static final String ASICE_EXTENSION = ".asice";
+    public static final String PDF_EXTENSION = ".pdf";
+    
+    public static String ensureAsiceExtension(String filename) {
+        return filename.toLowerCase().endsWith(ASICE_EXTENSION) ? filename : filename + ASICE_EXTENSION;
+    }
+    
+    public static String generateContainerFilename(String uid, Container.DocumentType type) {
+        return uid + "." + type.name().toLowerCase();
+    }
+}
+```
+*Explanation: Centralized constants and utility methods prevent magic strings and duplicate logic.*
+</example>
+
+<example type="invalid">
+# Bad: Scattered Constants and Magic Strings
+```java
+// Constants scattered across multiple classes
+public class IdCardService {
+    private static final String FILENAME_EXTENSION = ".asice"; // Duplicate
+    private void validate() {
+        String filename = uid + "." + documentType.name().toLowerCase(); // Duplicate logic
+        boolean isValid = validateService.isContainerValid(bytes, filename, regCode, userInfo.getId(), false, true, documentType, null, tokenInfo);
+    }
+}
+
+public class MobileIdService {
+    private void validate() {
+        String filename = request.getUid() + ".asice"; // Different approach, same goal
+        boolean isValid = validateService.isContainerValid(signedContainer, filename, statusResponse.getRegCode(), userInfo.getId(), false, true, documentType, null, tokenInfo);
+    }
+}
+
+public class SmartIdService {
+    private void validate() {
+        String filename = statusResponse.getSignedUid() + "." + digidocService.getType().name().toLowerCase(); // Third variation
+        // ... more duplicate parameter patterns
+    }
+}
+```
+*Explanation: Magic strings, scattered constants, and inconsistent approaches to same operations.*
+</example>
+
+<example>
+# Good: Base Class for Common Controller Patterns
+```java
+// Base class with common validation and error handling
+public abstract class BaseSigningController extends DefaultController {
+    
+    protected ResponseEntity<byte[]> handleSigningResult(SignResult signResult, String operationType, String identifier) {
+        HttpHeaders outHeaders = getAsicEHeaders(null);
+        
+        if (signResult.isValidationPerformed()) {
+            if (signResult.isValidationSuccessful()) {
+                outHeaders = HttpUtils.setRequestResponseStatus(outHeaders, HeaderResponseStatus.CREATED, 
+                           operationType + " SUCCESS! Container validated successfully.");
+            } else {
+                outHeaders = HttpUtils.setRequestResponseStatus(outHeaders, HeaderResponseStatus.CREATED, 
+                           operationType + " SUCCESS! Container validation failed: " + signResult.getValidationErrorMessage());
+                logger.warn("{}: {} - Container signed successfully but validation failed: {}", 
+                           operationType, identifier, signResult.getValidationErrorMessage());
+            }
+        } else {
+            outHeaders = HttpUtils.setRequestResponseStatus(outHeaders, HeaderResponseStatus.CREATED, operationType + " SUCCESS!");
+        }
+        
+        outHeaders = HttpHeadersUtils.setValidationStatus(outHeaders, 
+                   signResult.isValidationPerformed(), signResult.isValidationSuccessful(), signResult.getValidationErrorMessage());
+        
+        return new ResponseEntity<>(signResult.getSignedContainer(), outHeaders, HttpStatus.OK);
+    }
+    
+    protected ResponseEntity<byte[]> handleSigningError(String operationType, String identifier, Exception e) {
+        logger.error("{}: {} - Error during signing: {}", operationType, identifier, e.getMessage(), e);
+        HttpHeaders outHeaders = HttpUtils.setRequestResponseStatus(new HttpHeaders(), 
+                               HeaderResponseStatus.EXCEPTION, operationType + " failed: " + e.getMessage());
+        return new ResponseEntity<>(new byte[0], outHeaders, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+}
+
+// Controllers extend base class
+public class MobileIDController extends BaseSigningController {
+    @PostMapping("v2/container")
+    public ResponseEntity<byte[]> getContainerv2(@RequestHeader HttpHeaders headers, @RequestBody ContainerRequest request) {
+        try {
+            SignResult signResult = service.getSignedContainerWithValidationStatus(request, userInfo, tokenInfo);
+            return handleSigningResult(signResult, "Mobile-ID", request.getUid());
+        } catch (Exception e) {
+            return handleSigningError("Mobile-ID", request.getUid(), e);
+        }
+    }
+}
+```
+*Explanation: Common controller patterns centralized in base class to eliminate duplicate response handling.*
+</example>
+
+## Critical Rules
+
+### Code Review Checklist
+- **IDENTIFY**: Look for similar code patterns across files during reviews
+- **QUESTION**: "Could this logic be reused elsewhere?" If yes, centralize it
+- **EXTRACT**: Move duplicate code to utility classes, helper methods, or base classes
+- **CONSOLIDATE**: Merge similar methods that have slight variations into parameterized versions
+- **STANDARDIZE**: Use consistent approaches for similar operations across the codebase
+
+### When Creating New Code
+- **SEARCH**: Before implementing, search for existing similar functionality
+- **REUSE**: Use existing utilities and helpers when available
+- **EXTEND**: Add to existing utility classes rather than creating new ones for similar purposes
+- **PARAMETERIZE**: Design methods to handle variations through parameters rather than creating multiple similar methods
+
+### Refactoring Guidelines
+- **THRESHOLD**: If code appears 2+ times, consider extraction
+- **PRIORITY**: Address duplicate business logic first, then utility functions
+- **SAFETY**: Use comprehensive tests when refactoring to ensure behavior is preserved
+- **GRADUAL**: Refactor incrementally rather than large-scale changes
+
+### Anti-Patterns to Avoid
+- **COPY-PASTE**: Never copy entire methods or large code blocks
+- **MINOR_VARIATIONS**: Don't create separate methods for tiny differences (use parameters instead)
+- **SCATTERED_CONSTANTS**: Don't define the same constants in multiple places
+- **INCONSISTENT_APPROACHES**: Don't solve the same problem differently across similar classes
+
+## Documentation Requirements
+
+- **DOCUMENT** the purpose and usage of utility classes and helper methods
+- **PROVIDE** examples of how to use centralized functionality
+- **MAINTAIN** a registry of available utilities to prevent recreation
+- **UPDATE** documentation when consolidating existing functionality
+
+## Success Metrics
+
+- **REDUCED** code duplication (measurable by code analysis tools)
+- **IMPROVED** maintainability (changes require fewer file modifications)
+- **ENHANCED** consistency (similar operations work the same way across modules)
+- **SIMPLIFIED** testing (centralized logic is easier to unit test)
+- **FASTER** development (developers can reuse existing, tested functionality)
