@@ -17,6 +17,7 @@ type Decrypter struct {
 	cdocReader    io.Reader
 	cdocFile      string
 	privateKey    *key.PrivateKey
+	token         Token              // Optional: token for decryption (PKCS#11, PKCS#12, etc.)
 	certificate   *x509.Certificate // Optional: for recipient selection when multiple recipients
 	outputDir     string
 	outputWriter  io.Writer
@@ -70,6 +71,59 @@ func (d *Decrypter) WithPrivateKeyFromFile(filepath string) error {
 func (d *Decrypter) WithCertificate(cert *x509.Certificate) *Decrypter {
 	d.certificate = cert
 	return d
+}
+
+// WithToken sets a token (PKCS#11, PKCS#12, etc.) for decryption
+func (d *Decrypter) WithToken(token Token) *Decrypter {
+	d.token = token
+	return d
+}
+
+// WithPKCS12Token loads a PKCS#12 keystore and creates a token for decryption
+// password is the keystore password
+// alias is optional - if not provided, the first valid key entry will be used
+func (d *Decrypter) WithPKCS12Token(filepath string, password string, alias ...string) error {
+	data, err := os.ReadFile(filepath)
+	if err != nil {
+		return internal.NewDecryptionError("failed to read PKCS#12 file", err)
+	}
+
+	keyEntry, err := key.ParsePKCS12(data, password, alias...)
+	if err != nil {
+		return internal.NewDecryptionError("failed to parse PKCS#12 keystore", err)
+	}
+
+	token := NewPKCS12Token(keyEntry)
+	d.token = token
+
+	// Automatically set certificate from token
+	cert, err := token.GetCertificate()
+	if err != nil {
+		return internal.NewDecryptionError("failed to get certificate from PKCS#12 token", err)
+	}
+	d.certificate = cert
+
+	return nil
+}
+
+// WithPKCS11Token loads a PKCS#11 token and creates a token for decryption
+func (d *Decrypter) WithPKCS11Token(config key.PKCS11Config) error {
+	token, err := NewPKCS11Token(config)
+	if err != nil {
+		return err
+	}
+
+	d.token = token
+
+	// Automatically set certificate from token
+	cert, err := token.GetCertificate()
+	if err != nil {
+		token.Close()
+		return internal.NewDecryptionError("failed to get certificate from PKCS#11 token", err)
+	}
+	d.certificate = cert
+
+	return nil
 }
 
 // Decrypt decrypts the CDOC and returns decrypted data files
@@ -206,8 +260,13 @@ func (d *Decrypter) selectRecipient(recipients []xmlenc.Recipient) (xmlenc.Recip
 
 // decryptTransportKey decrypts the transport key using the recipient's method
 func (d *Decrypter) decryptTransportKey(recipient xmlenc.Recipient) ([]byte, error) {
+	// Prefer token over private key
+	if d.token != nil {
+		return d.decryptTransportKeyWithToken(recipient)
+	}
+
 	if d.privateKey == nil {
-		return nil, internal.NewDecryptionError("private key not set", nil)
+		return nil, internal.NewDecryptionError("private key or token not set", nil)
 	}
 
 	switch r := recipient.(type) {
@@ -215,6 +274,33 @@ func (d *Decrypter) decryptTransportKey(recipient xmlenc.Recipient) ([]byte, err
 		return d.decryptRSATransportKey(r)
 	case *xmlenc.ECRecipient:
 		return d.decryptECTransportKey(r)
+	default:
+		return nil, internal.NewDecryptionError("unsupported recipient type", nil)
+	}
+}
+
+// decryptTransportKeyWithToken decrypts the transport key using a token
+func (d *Decrypter) decryptTransportKeyWithToken(recipient xmlenc.Recipient) ([]byte, error) {
+	if d.token == nil {
+		return nil, internal.NewDecryptionError("token not set", nil)
+	}
+
+	switch r := recipient.(type) {
+	case *xmlenc.RSARecipient:
+		return d.token.DecryptRSA(r.EncryptedKey)
+	case *xmlenc.ECRecipient:
+		ephemeralKey := r.GetEphemeralPublicKey()
+		encryptedKey, err := r.GetEncryptedKey()
+		if err != nil {
+			return nil, internal.NewDecryptionError("failed to get encrypted key", err)
+		}
+		return d.token.DecryptEC(
+			ephemeralKey,
+			r.GetAlgorithmID(),
+			r.GetPartyUInfo(),
+			r.GetPartyVInfo(),
+			encryptedKey,
+		)
 	default:
 		return nil, internal.NewDecryptionError("unsupported recipient type", nil)
 	}
@@ -295,8 +381,8 @@ func (d *Decrypter) validateParameters() error {
 		return internal.NewDecryptionError("CDOC input not set", nil)
 	}
 
-	if d.privateKey == nil {
-		return internal.NewDecryptionError("private key not set", nil)
+	if d.privateKey == nil && d.token == nil {
+		return internal.NewDecryptionError("private key or token not set", nil)
 	}
 
 	return nil

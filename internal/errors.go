@@ -96,3 +96,18 @@ func NewCertificateError(message string, cause error) *CertificateError {
 	}
 }
 
+// PKCS11Error represents PKCS#11 token-related errors
+type PKCS11Error struct {
+	CDOCError
+}
+
+// NewPKCS11Error creates a new PKCS11Error
+func NewPKCS11Error(message string, cause error) *PKCS11Error {
+	return &PKCS11Error{
+		CDOCError: CDOCError{
+			Message: message,
+			Cause:   cause,
+		},
+	}
+}
+
