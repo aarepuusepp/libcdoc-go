@@ -8,7 +8,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"math/big"
-	"github.com/yourorg/cdoc1-go/internal"
+	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 )
 
 const (

@@ -4,7 +4,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/rsa"
 	"crypto/x509"
-	"github.com/yourorg/cdoc1-go/internal"
+	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 )
 
 // ParsePrivateKeyDER parses a private key from DER format (PKCS#8)

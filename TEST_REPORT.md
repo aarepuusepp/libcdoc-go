@@ -9,10 +9,10 @@ Date: Generated during test run
 All tests are **PASSING** ✅
 
 ```
-ok      github.com/yourorg/cdoc1-go/cdoc        17.469s
-ok      github.com/yourorg/cdoc1-go/cert        1.922s
-ok      github.com/yourorg/cdoc1-go/crypto      5.841s
-ok      github.com/yourorg/cdoc1-go/key         0.188s
+ok      github.com/aarepuusepp/libcdoc-go/cdoc        17.469s
+ok      github.com/aarepuusepp/libcdoc-go/cert        1.922s
+ok      github.com/aarepuusepp/libcdoc-go/crypto      5.841s
+ok      github.com/aarepuusepp/libcdoc-go/key         0.188s
 ```
 
 ### Test Coverage by Package

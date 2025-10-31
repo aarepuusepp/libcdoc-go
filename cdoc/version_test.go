@@ -54,5 +54,15 @@ func TestVersion_String(t *testing.T) {
 	if string(Version11) != "1.1" {
 		t.Errorf("Version11 = %s, want '1.1'", string(Version11))
 	}
+
+	if string(Version20) != "2.0" {
+		t.Errorf("Version20 = %s, want '2.0'", string(Version20))
+	}
+}
+
+func TestLibraryVersion(t *testing.T) {
+	if LibraryVersion != "2.0.0" {
+		t.Errorf("LibraryVersion = %s, want '2.0.0'", LibraryVersion)
+	}
 }
 

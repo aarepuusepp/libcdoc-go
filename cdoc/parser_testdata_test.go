@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/yourorg/cdoc1-go/xmlenc"
+	"github.com/aarepuusepp/libcdoc-go/v2/xmlenc"
 )
 
 // TestParser_CDOCFiles_CreatedByCdoc4j tests parsing actual CDOC files created by cdoc4j

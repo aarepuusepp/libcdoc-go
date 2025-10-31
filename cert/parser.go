@@ -4,7 +4,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"github.com/yourorg/cdoc1-go/internal"
+	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 )
 
 // ParseCertificatePEM parses an X.509 certificate from PEM format

@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yourorg/cdoc1-go/key"
+	"github.com/aarepuusepp/libcdoc-go/v2/key"
 )
 
 // TestDataFile is a helper struct for test data files

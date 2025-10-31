@@ -220,7 +220,7 @@ type CertificateError struct { CDOCError }
 
 **Story 1.1: Project Setup**
 
-- Task 1.1.1: Initialize Go module (`go mod init github.com/yourorg/cdoc1-go`) (0.5d)
+- Task 1.1.1: Initialize Go module (`go mod init github.com/aarepuusepp/libcdoc-go`) (0.5d)
 - Task 1.1.2: Create package structure and stub files (0.5d)
 - Task 1.1.3: Set up CI/CD (GitHub Actions: go test, go vet, gofmt, golint) (1d)
 - Task 1.1.4: Configure license files (MIT/Apache-2.0) (0.5d)

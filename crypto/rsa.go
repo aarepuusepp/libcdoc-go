@@ -4,7 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
-	"github.com/yourorg/cdoc1-go/internal"
+	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 )
 
 // EncryptRSA encrypts data using RSA PKCS#1 v1.5 encryption

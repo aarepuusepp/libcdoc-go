@@ -21,8 +21,8 @@ package main
 
 import (
     "bytes"
-    "github.com/yourorg/cdoc1-go/cdoc"
-    "github.com/yourorg/cdoc1-go/cert"
+    "github.com/aarepuusepp/libcdoc-go/cdoc"
+    "github.com/aarepuusepp/libcdoc-go/cert"
 )
 
 func encryptWithMultipleRecipients() {
@@ -105,7 +105,7 @@ package main
 
 import (
     "bytes"
-    "github.com/yourorg/cdoc1-go/cdoc"
+    "github.com/aarepuusepp/libcdoc-go/cdoc"
     "os"
 )
 

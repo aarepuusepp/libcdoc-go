@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yourorg/cdoc1-go/crypto"
-	"github.com/yourorg/cdoc1-go/key"
+	"github.com/aarepuusepp/libcdoc-go/v2/crypto"
+	"github.com/aarepuusepp/libcdoc-go/v2/key"
 	"software.sslmate.com/src/go-pkcs12"
 )
 

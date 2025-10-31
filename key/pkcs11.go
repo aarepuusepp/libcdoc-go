@@ -5,7 +5,7 @@ import (
 	"crypto/x509"
 
 	"github.com/miekg/pkcs11"
-	"github.com/yourorg/cdoc1-go/cert"
+	"github.com/aarepuusepp/libcdoc-go/v2/cert"
 )
 
 // PKCS11Context wraps PKCS#11 operations

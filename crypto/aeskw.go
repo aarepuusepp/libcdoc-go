@@ -2,7 +2,7 @@ package crypto
 
 import (
 	"crypto/aes"
-	"github.com/yourorg/cdoc1-go/internal"
+	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 )
 
 // AESKW256 implements AES Key Wrap (RFC 3394) for 256-bit keys

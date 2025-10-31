@@ -42,9 +42,9 @@ module my-cdoc-test
 
 go 1.22
 
-require github.com/yourorg/cdoc1-go v0.0.0
+require github.com/aarepuusepp/libcdoc-go/v2 v0.0.0
 
-replace github.com/yourorg/cdoc1-go => C:\WebROOT\TARKVARA.NEW\Digisign\cdoc1-go
+replace github.com/aarepuusepp/libcdoc-go/v2 => C:\WebROOT\TARKVARA.NEW\Digisign\cdoc1-go
 ```
 
 **Important**: Use forward slashes `/` or escaped backslashes `\\` in the path, or Go will handle Windows backslashes automatically if you use the full Windows path format.
@@ -58,8 +58,8 @@ package main
 
 import (
     "fmt"
-    "github.com/yourorg/cdoc1-go/cdoc"
-    "github.com/yourorg/cdoc1-go/cert"
+    "github.com/aarepuusepp/libcdoc-go/v2/cdoc"
+    "github.com/aarepuusepp/libcdoc-go/v2/cert"
 )
 
 func main() {
@@ -129,7 +129,7 @@ module my-app
 
 go 1.22
 
-require github.com/yourorg/cdoc1-go v0.0.0
+require github.com/aarepuusepp/libcdoc-go/v2 v0.0.0
 ```
 
 Since both modules are in the workspace, Go will automatically use the local version.
@@ -167,7 +167,7 @@ module my-app
 
 go 1.22
 
-require github.com/yourorg/cdoc1-go v0.1.0
+require github.com/aarepuusepp/libcdoc-go/v2 v0.1.0
 ```
 
 #### Step 4: Configure Go for Private Repo
@@ -199,9 +199,9 @@ module my-test-app
 
 go 1.22
 
-require github.com/yourorg/cdoc1-go v0.0.0
+require github.com/aarepuusepp/libcdoc-go/v2 v0.0.0
 
-replace github.com/yourorg/cdoc1-go => ../cdoc1-go
+replace github.com/aarepuusepp/libcdoc-go/v2 => ../cdoc1-go
 ```
 
 ## Testing the Library
@@ -215,13 +215,13 @@ The library includes a CLI tool you can test immediately:
 cd C:\WebROOT\TARKVARA.NEW\Digisign\cdoc1-go
 
 # Build the CLI tool
-go build -o cdoc1.exe ./cmd/cdoc1
+go build -o cdoc.exe ./cli-tools/cdoc-cli
 
 # Test encryption (if you have test certificates)
-.\cdoc1.exe encrypt -f test.pdf -r cert.pem -o test.cdoc
+.\cdoc.exe encrypt -f test.pdf -r cert.pem -o test.cdoc
 
 # Test decryption
-.\cdoc1.exe decrypt -f test.cdoc -k private_key.pem -o ./decrypted
+.\cdoc.exe decrypt -f test.cdoc -k private_key.pem -o ./decrypted
 ```
 
 ### Running Unit Tests
@@ -251,8 +251,8 @@ import (
     "fmt"
     "log"
     "os"
-    "github.com/yourorg/cdoc1-go/cdoc"
-    "github.com/yourorg/cdoc1-go/cert"
+    "github.com/aarepuusepp/libcdoc-go/v2/cdoc"
+    "github.com/aarepuusepp/libcdoc-go/v2/cert"
 )
 
 func main() {
@@ -325,7 +325,7 @@ go version
 go list -m all | Select-String cdoc1-go
 
 # Check if replace directive is working
-go mod why github.com/yourorg/cdoc1-go
+go mod why github.com/aarepuusepp/libcdoc-go/v2
 ```
 
 ## Next Steps

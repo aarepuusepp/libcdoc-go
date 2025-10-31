@@ -1,11 +1,12 @@
-# Windows Test Example
+# CDOC Test Application
 
-Comprehensive test application that demonstrates encryption and decryption using the `cdoc1-go` library with CDOC 1.1 format.
+Comprehensive test application that demonstrates encryption and decryption using the `libcdoc-go` library with CDOC 1.1 and 2.0 formats.
 
 ## What It Tests
 
-This example performs 8 complete test scenarios:
+This example performs 16 complete test scenarios:
 
+### CDOC 1.1 Tests:
 1. **RSA Encryption**: Encrypts the test PDF file using RSA certificate
 2. **RSA Decryption**: Decrypts the RSA-encrypted CDOC using PKCS12 keystore
 3. **ECC Encryption**: Encrypts the test PDF file using ECC (Elliptic Curve) certificate
@@ -15,9 +16,19 @@ This example performs 8 complete test scenarios:
 7. **Multiple Files Decryption**: Decrypts a CDOC containing multiple files
 8. **Multiple Files + Multiple Recipients**: Encrypts both PDF and DOCX files with both RSA and ECC recipients
 
+### CDOC 2.0 Tests:
+9. **RSA Encryption**: Encrypts the test PDF file using RSA certificate (CDOC 2.0)
+10. **RSA Decryption**: Decrypts the RSA-encrypted CDOC 2.0 using PKCS12 keystore
+11. **ECC Encryption**: Encrypts the test PDF file using ECC certificate (CDOC 2.0)
+12. **ECC Decryption**: Decrypts the ECC-encrypted CDOC 2.0 using PKCS12 keystore
+13. **Password Encryption**: Encrypts the test PDF file using password (CDOC 2.0)
+14. **Password Decryption**: Decrypts the password-encrypted CDOC 2.0
+15. **Multiple Files RSA**: Encrypts both PDF and DOCX files with RSA certificate (CDOC 2.0)
+16. **Multiple Files RSA Decryption**: Decrypts multiple files RSA CDOC 2.0
+
 ## Prerequisites
 
-1. Go 1.22 or later installed
+1. Go 1.24.2 or later installed
 2. The library set up using one of the methods from `docs/WINDOWS_TESTING_GUIDE.md`
 3. Test files in place:
    - `testdata/samples/TEST-öäüõÖÄÜÕžšŽŠ-01.pdf` (test PDF with Estonian characters)
@@ -29,87 +40,53 @@ This example performs 8 complete test scenarios:
 
 ### Option 1: Using Local Path Replacement
 
-1. Create a `go.mod` in this directory:
+1. Navigate to the test directory:
 ```bash
-cd examples/windows-test
-go mod init windows-test
+cd cli-tools/cdoc-test
 ```
 
-2. Edit `go.mod` to add:
+2. The `go.mod` file should already be configured with:
 ```go
-module windows-test
+module cdoc-test
 
-go 1.22
+go 1.24.2
 
-require github.com/yourorg/cdoc1-go v0.0.0
+require github.com/aarepuusepp/libcdoc-go/v2 v2.0.0
 
-replace github.com/yourorg/cdoc1-go => ../../
+replace github.com/aarepuusepp/libcdoc-go/v2 => ../../
 ```
 
-3. Run `go mod tidy`
-
-### Option 2: Using Go Workspace
-
-1. From the root directory, initialize workspace:
-```bash
-cd C:\WebROOT\TARKVARA.NEW\Digisign\cdoc1-go
-go work init
-go work use .
-go work use ./examples/windows-test
-```
-
-2. In the example directory:
-```bash
-cd examples/windows-test
-go mod init windows-test
-go mod tidy
-```
+3. Run `go mod tidy` to ensure dependencies are correct
 
 ## Running the Test
 
 ```bash
+cd cli-tools/cdoc-test
 go run main.go
 ```
 
 The application will automatically:
 - Verify all test files exist
-- Encrypt the PDF with RSA certificate → creates `TEST_RSA_encrypted.cdoc`
-- Decrypt RSA CDOC → creates `decrypted_rsa/` directory
-- Encrypt the PDF with ECC certificate → creates `TEST_ECC_encrypted.cdoc`
-- Decrypt ECC CDOC → creates `decrypted_ecc/` directory
-- Encrypt with both RSA and ECC recipients → creates `TEST_MULTI_encrypted.cdoc`
-- Encrypt both PDF and DOCX files with RSA → creates `TEST_MULTIPLE_FILES_RSA_encrypted.cdoc`
-- Decrypt multiple files CDOC → creates `decrypted_multiple_files/` directory
-- Encrypt both PDF and DOCX files with RSA + ECC recipients → creates `TEST_MULTIPLE_FILES_MULTI_encrypted.cdoc`
+- Run all 16 test scenarios (CDOC 1.1 and 2.0)
+- Create encrypted CDOC files (.cdoc for 1.1, .cdoc2 for 2.0)
+- Decrypt the files and verify they work correctly
 
 ## Expected Output
 
 ```
-=== cdoc1-go Windows Test Application ===
-Testing CDOC 1.1 encryption and decryption with test data
+=== libcdoc-go Test Application ===
+Testing CDOC 1.1 and 2.0 encryption and decryption with test data
 
 ✓ All test files verified
 
 ============================================================
 Test 1: Encrypt PDF with RSA certificate (CDOC 1.1)
 ============================================================
-✓ Loaded RSA certificate: CN=Test User
-✓ Added RSA recipient to builder
-✓ Added data file: TEST-öäüõÖÄÜÕžšŽŠ-01.pdf (12345 bytes)
-✓ CDOC file created: ./TEST_RSA_encrypted.cdoc (67890 bytes)
-✓ RSA encryption successful: ./TEST_RSA_encrypted.cdoc
-
+...
 ============================================================
-Test 2: Decrypt RSA CDOC with PKCS12 keystore
+Test 9: Encrypt PDF with RSA certificate (CDOC 2.0)
 ============================================================
-✓ Loaded CDOC file: ./TEST_RSA_encrypted.cdoc
-✓ Loaded PKCS12 token: ../../testdata/rsa/rsa.p12
-✓ Decrypted 1 file(s)
-✓ Wrote decrypted file: ./decrypted_rsa/TEST-öäüõÖÄÜÕžšŽŠ-01.pdf (12345 bytes)
-✓ RSA decryption successful: ./decrypted_rsa
-
-... (similar output for ECC and multiple recipients tests)
-
+...
 ============================================================
 === All tests passed! Library is working correctly on Windows. ===
 ============================================================
@@ -119,18 +96,25 @@ Test 2: Decrypt RSA CDOC with PKCS12 keystore
 
 After running the test, you'll have:
 
-- `TEST_RSA_encrypted.cdoc` - CDOC 1.1 file encrypted with RSA certificate (single file)
-- `TEST_ECC_encrypted.cdoc` - CDOC 1.1 file encrypted with ECC certificate (single file)
-- `TEST_MULTI_encrypted.cdoc` - CDOC 1.1 file encrypted with both RSA and ECC recipients (single file)
+### CDOC 1.1 Files:
+- `TEST_RSA_encrypted.cdoc` - CDOC 1.1 file encrypted with RSA certificate
+- `TEST_ECC_encrypted.cdoc` - CDOC 1.1 file encrypted with ECC certificate
+- `TEST_MULTI_encrypted.cdoc` - CDOC 1.1 file encrypted with both RSA and ECC recipients
 - `TEST_MULTIPLE_FILES_RSA_encrypted.cdoc` - CDOC 1.1 file with PDF and DOCX encrypted with RSA certificate
 - `TEST_MULTIPLE_FILES_MULTI_encrypted.cdoc` - CDOC 1.1 file with PDF and DOCX encrypted with RSA + ECC recipients
-- `decrypted_rsa/` - Directory containing decrypted files from RSA CDOC
-- `decrypted_ecc/` - Directory containing decrypted files from ECC CDOC
-- `decrypted_multiple_files/` - Directory containing both decrypted PDF and DOCX files
+
+### CDOC 2.0 Files:
+- `TEST_RSA_encrypted.cdoc2` - CDOC 2.0 file encrypted with RSA certificate
+- `TEST_ECC_encrypted.cdoc2` - CDOC 2.0 file encrypted with ECC certificate
+- `TEST_PASSWORD_encrypted.cdoc2` - CDOC 2.0 file encrypted with password
+- `TEST_MULTIPLE_FILES_RSA_encrypted.cdoc2` - CDOC 2.0 file with PDF and DOCX encrypted with RSA certificate
+
+### Decrypted Directories:
+- `decrypted_*` directories containing decrypted files from various CDOC files
 
 ## Test Files Location
 
-The application uses relative paths from the `examples/windows-test/` directory:
+The application uses relative paths from the `cli-tools/cdoc-test/` directory:
 
 - PDF file: `../../testdata/samples/TEST-öäüõÖÄÜÕžšŽŠ-01.pdf`
 - DOCX file: `../../testdata/samples/TEST-öäüõÖÄÜÕžšŽŠ-01.docx`
@@ -141,9 +125,11 @@ The application uses relative paths from the `examples/windows-test/` directory:
 
 **PKCS12 Password**: All test keystores use password `"test"` (hardcoded in the application).
 
+**CDOC 2.0 Password**: Password-based encryption uses password `"test-password-123"`.
+
 ## Troubleshooting
 
-- **"cannot find package"**: Make sure you've set up the `replace` directive or workspace correctly
+- **"cannot find package"**: Make sure you've set up the `replace` directive correctly
 - **"test file not found"**: Verify that test files are in the expected `testdata/` directories
 - **"certificate parse error"**: Check that certificate files are valid PEM format
 - **"PKCS12 error"**: Verify keystore password is correct (should be "test" for test keystores)
@@ -151,12 +137,23 @@ The application uses relative paths from the `examples/windows-test/` directory:
 
 ## Features Demonstrated
 
+### CDOC 1.1:
 - ✅ CDOC 1.1 encryption with RSA certificates
 - ✅ CDOC 1.1 encryption with ECC certificates
 - ✅ Multiple recipients support (RSA + ECC in same CDOC)
 - ✅ Multiple files encryption (PDF + DOCX in same CDOC)
 - ✅ Multiple files with multiple recipients
 - ✅ PKCS12 keystore decryption
+
+### CDOC 2.0:
+- ✅ CDOC 2.0 encryption with RSA certificates
+- ✅ CDOC 2.0 encryption with ECC certificates
+- ✅ CDOC 2.0 password-based encryption
+- ✅ CDOC 2.0 password-based decryption
+- ✅ Multiple files encryption (CDOC 2.0)
+- ✅ PKCS12 keystore decryption (CDOC 2.0)
+
+### General:
 - ✅ File handling with special characters (Estonian characters: öäüõÖÄÜÕžšŽŠ)
 - ✅ Complete encryption → decryption workflow for single and multiple files
 - ✅ Error handling and verification

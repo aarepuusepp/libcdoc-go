@@ -6,8 +6,9 @@ import (
 
 	"crypto/x509"
 
-	"github.com/yourorg/cdoc1-go/cert"
-	"github.com/yourorg/cdoc1-go/internal"
+	"github.com/aarepuusepp/libcdoc-go/v2/cert"
+	"github.com/aarepuusepp/libcdoc-go/v2/internal"
+	"github.com/aarepuusepp/libcdoc-go/v2/key"
 )
 
 // LoadCertificate loads a certificate from a file path
@@ -26,10 +27,25 @@ func LoadCertificate(filepath string) (*x509.Certificate, error) {
 	return cert.ParseCertificate(certData)
 }
 
-// LoadPrivateKey is a convenience function that will be implemented when we integrate the key package
-// For now, this is a placeholder
-func LoadPrivateKey(filepath string) (interface{}, error) {
-	// TODO: Implement using key package
-	return nil, internal.NewValidationError("LoadPrivateKey not yet implemented", nil)
+// LoadPrivateKey loads a private key from a file path
+// Supports both PEM and DER formats (automatically detected by key package)
+func LoadPrivateKey(filepath string) (*key.PrivateKey, error) {
+	file, err := os.Open(filepath)
+	if err != nil {
+		return nil, internal.NewValidationError("failed to open private key file", err)
+	}
+	defer file.Close()
+
+	keyData, err := io.ReadAll(file)
+	if err != nil {
+		return nil, internal.NewValidationError("failed to read private key file", err)
+	}
+
+	privateKey, err := key.ParsePrivateKey(keyData)
+	if err != nil {
+		return nil, internal.NewValidationError("failed to parse private key", err)
+	}
+
+	return privateKey, nil
 }
 

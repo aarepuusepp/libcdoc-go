@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 
-	"github.com/yourorg/cdoc1-go/internal"
+	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 )
 
 // DDOCSignedDoc represents the root element of a DDOC structure

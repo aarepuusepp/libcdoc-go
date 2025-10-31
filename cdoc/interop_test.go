@@ -8,17 +8,24 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yourorg/cdoc1-go/cert"
-	"github.com/yourorg/cdoc1-go/key"
-	"github.com/yourorg/cdoc1-go/xmlenc"
+	"github.com/aarepuusepp/libcdoc-go/v2/cert"
+	"github.com/aarepuusepp/libcdoc-go/v2/key"
+	"github.com/aarepuusepp/libcdoc-go/v2/xmlenc"
 )
 
-// Helper function to load test certificate from cdoc4j resources
+// Helper function to load test certificate from testdata resources
 func loadTestCert(t *testing.T, certPathParts ...string) *x509.Certificate {
-	parts := append([]string{"cdoc4j", "src", "test", "resources"}, certPathParts...)
+	// Try testdata first (copied from cdoc4j)
+	parts := append([]string{"testdata"}, certPathParts...)
 	fullPath := filepath.Join(parts...)
+	
+	// Fallback to cdoc4j if testdata doesn't exist (for backward compatibility)
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		t.Skipf("Test certificate not found at %s, skipping interoperability test", fullPath)
+		oldParts := append([]string{"cdoc4j", "src", "test", "resources"}, certPathParts...)
+		fullPath = filepath.Join(oldParts...)
+		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+			t.Skipf("Test certificate not found, skipping interoperability test")
+		}
 	}
 
 	certData, err := os.ReadFile(fullPath)
@@ -34,11 +41,17 @@ func loadTestCert(t *testing.T, certPathParts ...string) *x509.Certificate {
 	return cert
 }
 
-// Helper function to load test private key from cdoc4j resources
+// Helper function to load test private key from testdata resources
 func loadTestKey(t *testing.T, keyPath string) *key.PrivateKey {
-	fullPath := filepath.Join("cdoc4j", "src", "test", "resources", keyPath)
+	// Try testdata first (copied from cdoc4j)
+	fullPath := filepath.Join("testdata", keyPath)
+	
+	// Fallback to cdoc4j if testdata doesn't exist (for backward compatibility)
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		t.Skipf("Test key not found at %s, skipping interoperability test", fullPath)
+		fullPath = filepath.Join("cdoc4j", "src", "test", "resources", keyPath)
+		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+			t.Skipf("Test key not found at %s, skipping interoperability test", fullPath)
+		}
 	}
 
 	keyData, err := os.ReadFile(fullPath)
@@ -56,9 +69,13 @@ func loadTestKey(t *testing.T, keyPath string) *key.PrivateKey {
 
 // TestDecryptCDOC11_RSA_CreatedByCdoc4j tests decrypting a CDOC 1.1 file created by cdoc4j with RSA recipient
 func TestDecryptCDOC11_RSA_CreatedByCdoc4j(t *testing.T) {
-	cdocPath := filepath.Join("cdoc4j", "src", "test", "resources", "cdoc", "valid_cdoc11_RSA.cdoc")
+	// Try testdata first, fallback to cdoc4j
+	cdocPath := filepath.Join("testdata", "cdoc", "valid_cdoc11_RSA.cdoc")
 	if _, err := os.Stat(cdocPath); os.IsNotExist(err) {
-		t.Skipf("CDOC test file not found at %s, skipping interoperability test", cdocPath)
+		cdocPath = filepath.Join("cdoc4j", "src", "test", "resources", "cdoc", "valid_cdoc11_RSA.cdoc")
+		if _, err := os.Stat(cdocPath); os.IsNotExist(err) {
+			t.Skipf("CDOC test file not found, skipping interoperability test")
+		}
 	}
 
 	// For this test, we need the corresponding private key
@@ -106,9 +123,13 @@ func TestDecryptCDOC11_RSA_CreatedByCdoc4j(t *testing.T) {
 
 // TestDecryptCDOC11_ECC_CreatedByCdoc4j tests decrypting a CDOC 1.1 file created by cdoc4j with EC recipient
 func TestDecryptCDOC11_ECC_CreatedByCdoc4j(t *testing.T) {
-	cdocPath := filepath.Join("cdoc4j", "src", "test", "resources", "cdoc", "valid_cdoc11_ECC.cdoc")
+	// Try testdata first, fallback to cdoc4j
+	cdocPath := filepath.Join("testdata", "cdoc", "valid_cdoc11_ECC.cdoc")
 	if _, err := os.Stat(cdocPath); os.IsNotExist(err) {
-		t.Skipf("CDOC test file not found at %s, skipping interoperability test", cdocPath)
+		cdocPath = filepath.Join("cdoc4j", "src", "test", "resources", "cdoc", "valid_cdoc11_ECC.cdoc")
+		if _, err := os.Stat(cdocPath); os.IsNotExist(err) {
+			t.Skipf("CDOC test file not found, skipping interoperability test")
+		}
 	}
 
 	cdocFile, err := os.Open(cdocPath)
@@ -151,9 +172,13 @@ func TestDecryptCDOC11_ECC_CreatedByCdoc4j(t *testing.T) {
 
 // TestDecryptCDOC11_RSA_WithDDOC_CreatedByCdoc4j tests decrypting a CDOC 1.1 with DDOC created by cdoc4j
 func TestDecryptCDOC11_RSA_WithDDOC_CreatedByCdoc4j(t *testing.T) {
-	cdocPath := filepath.Join("cdoc4j", "src", "test", "resources", "cdoc", "valid_cdoc11_RSA_withDDOC.cdoc")
+	// Try testdata first, fallback to cdoc4j
+	cdocPath := filepath.Join("testdata", "cdoc", "valid_cdoc11_RSA_withDDOC.cdoc")
 	if _, err := os.Stat(cdocPath); os.IsNotExist(err) {
-		t.Skipf("CDOC test file not found at %s, skipping interoperability test", cdocPath)
+		cdocPath = filepath.Join("cdoc4j", "src", "test", "resources", "cdoc", "valid_cdoc11_RSA_withDDOC.cdoc")
+		if _, err := os.Stat(cdocPath); os.IsNotExist(err) {
+			t.Skipf("CDOC test file not found, skipping interoperability test")
+		}
 	}
 
 	cdocFile, err := os.Open(cdocPath)
@@ -418,9 +443,13 @@ func TestCDOC11StructureValidation(t *testing.T) {
 
 	for _, tt := range testFiles {
 		t.Run(tt.name, func(t *testing.T) {
-			cdocPath := filepath.Join("cdoc4j", "src", "test", "resources", "cdoc", tt.path)
+			// Try testdata first, fallback to cdoc4j
+			cdocPath := filepath.Join("testdata", "cdoc", tt.path)
 			if _, err := os.Stat(cdocPath); os.IsNotExist(err) {
-				t.Skipf("CDOC test file not found at %s", cdocPath)
+				cdocPath = filepath.Join("cdoc4j", "src", "test", "resources", "cdoc", tt.path)
+				if _, err := os.Stat(cdocPath); os.IsNotExist(err) {
+					t.Skipf("CDOC test file not found: %s", tt.path)
+				}
 			}
 			verifyCDOCStructure(t, cdocPath, tt.version)
 		})

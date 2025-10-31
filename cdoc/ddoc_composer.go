@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/yourorg/cdoc1-go/internal"
+	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 )
 
 // convertIntToString converts int to string

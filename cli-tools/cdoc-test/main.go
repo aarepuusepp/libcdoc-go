@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/yourorg/cdoc1-go/cdoc"
-	"github.com/yourorg/cdoc1-go/cert"
+	"github.com/aarepuusepp/libcdoc-go/v2/cdoc"
+	"github.com/aarepuusepp/libcdoc-go/v2/cert"
 )
 
 const (
@@ -22,8 +22,8 @@ const (
 )
 
 func main() {
-	fmt.Println("=== cdoc1-go Windows Test Application ===")
-	fmt.Println("Testing CDOC 1.1 encryption and decryption with test data\n")
+	fmt.Println("=== libcdoc-go Test Application ===")
+	fmt.Println("Testing CDOC 1.1 and 2.0 encryption and decryption with test data\n")
 
 	// Verify test files exist
 	if err := verifyTestFiles(); err != nil {
@@ -149,6 +149,86 @@ func main() {
 		log.Fatalf("✗ Multiple files with multiple recipients decryption with ECC failed: %v\n", err)
 	}
 	fmt.Printf("✓ Multiple files with multiple recipients decryption with ECC successful: %s\n\n", multiFileMultiRecipientECCDir)
+
+	// Test 9: Encrypt with RSA certificate (CDOC 2.0)
+	fmt.Println("=" + repeatChar("=", 60))
+	fmt.Println("Test 9: Encrypt PDF with RSA certificate (CDOC 2.0)")
+	fmt.Println("=" + repeatChar("=", 60))
+	rsaCDOC2Path, err := encryptWithRSA_CDOC2()
+	if err != nil {
+		log.Fatalf("✗ RSA CDOC 2.0 encryption failed: %v\n", err)
+	}
+	fmt.Printf("✓ RSA CDOC 2.0 encryption successful: %s\n\n", rsaCDOC2Path)
+
+	// Test 10: Decrypt RSA CDOC 2.0
+	fmt.Println("=" + repeatChar("=", 60))
+	fmt.Println("Test 10: Decrypt RSA CDOC 2.0 with PKCS12 keystore")
+	fmt.Println("=" + repeatChar("=", 60))
+	rsaCDOC2OutputDir := getDecryptFolderName(rsaCDOC2Path)
+	if err := decryptWithPKCS12(rsaCDOC2Path, rsaP12Path, rsaCDOC2OutputDir); err != nil {
+		log.Fatalf("✗ RSA CDOC 2.0 decryption failed: %v\n", err)
+	}
+	fmt.Printf("✓ RSA CDOC 2.0 decryption successful: %s\n\n", rsaCDOC2OutputDir)
+
+	// Test 11: Encrypt with ECC certificate (CDOC 2.0)
+	fmt.Println("=" + repeatChar("=", 60))
+	fmt.Println("Test 11: Encrypt PDF with ECC certificate (CDOC 2.0)")
+	fmt.Println("=" + repeatChar("=", 60))
+	eccCDOC2Path, err := encryptWithECC_CDOC2()
+	if err != nil {
+		log.Fatalf("✗ ECC CDOC 2.0 encryption failed: %v\n", err)
+	}
+	fmt.Printf("✓ ECC CDOC 2.0 encryption successful: %s\n\n", eccCDOC2Path)
+
+	// Test 12: Decrypt ECC CDOC 2.0
+	fmt.Println("=" + repeatChar("=", 60))
+	fmt.Println("Test 12: Decrypt ECC CDOC 2.0 with PKCS12 keystore")
+	fmt.Println("=" + repeatChar("=", 60))
+	eccCDOC2OutputDir := getDecryptFolderName(eccCDOC2Path)
+	if err := decryptWithPKCS12(eccCDOC2Path, eccP12Path, eccCDOC2OutputDir); err != nil {
+		log.Fatalf("✗ ECC CDOC 2.0 decryption failed: %v\n", err)
+	}
+	fmt.Printf("✓ ECC CDOC 2.0 decryption successful: %s\n\n", eccCDOC2OutputDir)
+
+	// Test 13: Encrypt with password (CDOC 2.0)
+	fmt.Println("=" + repeatChar("=", 60))
+	fmt.Println("Test 13: Encrypt PDF with password (CDOC 2.0)")
+	fmt.Println("=" + repeatChar("=", 60))
+	passwordCDOC2Path, err := encryptWithPassword_CDOC2()
+	if err != nil {
+		log.Fatalf("✗ Password CDOC 2.0 encryption failed: %v\n", err)
+	}
+	fmt.Printf("✓ Password CDOC 2.0 encryption successful: %s\n\n", passwordCDOC2Path)
+
+	// Test 14: Decrypt password CDOC 2.0
+	fmt.Println("=" + repeatChar("=", 60))
+	fmt.Println("Test 14: Decrypt password CDOC 2.0")
+	fmt.Println("=" + repeatChar("=", 60))
+	passwordCDOC2OutputDir := getDecryptFolderName(passwordCDOC2Path)
+	if err := decryptWithPassword_CDOC2(passwordCDOC2Path, passwordCDOC2OutputDir); err != nil {
+		log.Fatalf("✗ Password CDOC 2.0 decryption failed: %v\n", err)
+	}
+	fmt.Printf("✓ Password CDOC 2.0 decryption successful: %s\n\n", passwordCDOC2OutputDir)
+
+	// Test 15: Encrypt multiple files with RSA (CDOC 2.0)
+	fmt.Println("=" + repeatChar("=", 60))
+	fmt.Println("Test 15: Encrypt multiple files (PDF + DOCX) with RSA certificate (CDOC 2.0)")
+	fmt.Println("=" + repeatChar("=", 60))
+	multiFileRSA_CDOC2Path, err := encryptMultipleFilesWithRSA_CDOC2()
+	if err != nil {
+		log.Fatalf("✗ Multiple files RSA CDOC 2.0 encryption failed: %v\n", err)
+	}
+	fmt.Printf("✓ Multiple files RSA CDOC 2.0 encryption successful: %s\n\n", multiFileRSA_CDOC2Path)
+
+	// Test 16: Decrypt multiple files RSA CDOC 2.0
+	fmt.Println("=" + repeatChar("=", 60))
+	fmt.Println("Test 16: Decrypt multiple files RSA CDOC 2.0 with PKCS12 keystore")
+	fmt.Println("=" + repeatChar("=", 60))
+	multiFileRSA_CDOC2OutputDir := getDecryptFolderName(multiFileRSA_CDOC2Path)
+	if err := decryptWithPKCS12(multiFileRSA_CDOC2Path, rsaP12Path, multiFileRSA_CDOC2OutputDir); err != nil {
+		log.Fatalf("✗ Multiple files RSA CDOC 2.0 decryption failed: %v\n", err)
+	}
+	fmt.Printf("✓ Multiple files RSA CDOC 2.0 decryption successful: %s\n\n", multiFileRSA_CDOC2OutputDir)
 
 	fmt.Println("=" + repeatChar("=", 60))
 	fmt.Println("=== All tests passed! Library is working correctly on Windows. ===")
@@ -468,7 +548,13 @@ func decryptWithPKCS12(cdocPath, p12Path, outputDir string) error {
 func getDecryptFolderName(cdocPath string) string {
 	// Extract filename without extension and create folder name
 	baseName := filepath.Base(cdocPath)
-	nameWithoutExt := baseName[:len(baseName)-len(filepath.Ext(baseName))]
+	ext := filepath.Ext(baseName)
+	nameWithoutExt := baseName[:len(baseName)-len(ext)]
+	
+	// Add _CDOC2 suffix for CDOC 2.0 files to avoid overwriting CDOC 1.x folders
+	if ext == ".cdoc2" {
+		return "./decrypted_" + nameWithoutExt + "_CDOC2"
+	}
 	return "./decrypted_" + nameWithoutExt
 }
 
@@ -477,6 +563,184 @@ func getDecryptFolderNameWithSuffix(cdocPath string, suffix string) string {
 	baseName := filepath.Base(cdocPath)
 	nameWithoutExt := baseName[:len(baseName)-len(filepath.Ext(baseName))]
 	return "./decrypted_" + nameWithoutExt + suffix
+}
+
+func encryptWithRSA_CDOC2() (string, error) {
+	// Load RSA certificate
+	certData, err := os.ReadFile(rsaCertPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read RSA certificate: %w", err)
+	}
+
+	certificate, err := cert.ParseCertificatePEM(certData)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse RSA certificate: %w", err)
+	}
+	fmt.Printf("✓ Loaded RSA certificate: %s\n", certificate.Subject.String())
+
+	// Create builder with CDOC 2.0
+	builder := cdoc.NewBuilder()
+	builder.Version(cdoc.Version20)
+
+	if err := builder.WithRecipientCertificate(certificate); err != nil {
+		return "", fmt.Errorf("failed to add RSA recipient: %w", err)
+	}
+	fmt.Println("✓ Added RSA recipient to builder")
+
+	// Add PDF file
+	if err := addDataFile(builder, testPDFPath); err != nil {
+		return "", fmt.Errorf("failed to add data file: %w", err)
+	}
+
+	// Build CDOC
+	outputPath := "./TEST_RSA_encrypted.cdoc2"
+	if err := buildCDOC(builder, outputPath); err != nil {
+		return "", err
+	}
+
+	return outputPath, nil
+}
+
+func encryptWithECC_CDOC2() (string, error) {
+	// Load ECC certificate
+	certData, err := os.ReadFile(eccCertPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read ECC certificate: %w", err)
+	}
+
+	certificate, err := cert.ParseCertificatePEM(certData)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse ECC certificate: %w", err)
+	}
+	fmt.Printf("✓ Loaded ECC certificate: %s\n", certificate.Subject.String())
+
+	// Create builder with CDOC 2.0
+	builder := cdoc.NewBuilder()
+	builder.Version(cdoc.Version20)
+
+	if err := builder.WithRecipientCertificate(certificate); err != nil {
+		return "", fmt.Errorf("failed to add ECC recipient: %w", err)
+	}
+	fmt.Println("✓ Added ECC recipient to builder")
+
+	// Add PDF file
+	if err := addDataFile(builder, testPDFPath); err != nil {
+		return "", fmt.Errorf("failed to add data file: %w", err)
+	}
+
+	// Build CDOC
+	outputPath := "./TEST_ECC_encrypted.cdoc2"
+	if err := buildCDOC(builder, outputPath); err != nil {
+		return "", err
+	}
+
+	return outputPath, nil
+}
+
+func encryptWithPassword_CDOC2() (string, error) {
+	password := "test-password-123"
+
+	// Create builder with CDOC 2.0
+	builder := cdoc.NewBuilder()
+	builder.Version(cdoc.Version20)
+
+	if err := builder.WithPassword(password); err != nil {
+		return "", fmt.Errorf("failed to add password recipient: %w", err)
+	}
+	fmt.Println("✓ Added password recipient to builder")
+
+	// Add PDF file
+	if err := addDataFile(builder, testPDFPath); err != nil {
+		return "", fmt.Errorf("failed to add data file: %w", err)
+	}
+
+	// Build CDOC
+	outputPath := "./TEST_PASSWORD_encrypted.cdoc2"
+	if err := buildCDOC(builder, outputPath); err != nil {
+		return "", err
+	}
+
+	return outputPath, nil
+}
+
+func encryptMultipleFilesWithRSA_CDOC2() (string, error) {
+	// Load RSA certificate
+	certData, err := os.ReadFile(rsaCertPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read RSA certificate: %w", err)
+	}
+
+	certificate, err := cert.ParseCertificatePEM(certData)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse RSA certificate: %w", err)
+	}
+	fmt.Printf("✓ Loaded RSA certificate: %s\n", certificate.Subject.String())
+
+	// Create builder with CDOC 2.0
+	builder := cdoc.NewBuilder()
+	builder.Version(cdoc.Version20)
+
+	if err := builder.WithRecipientCertificate(certificate); err != nil {
+		return "", fmt.Errorf("failed to add RSA recipient: %w", err)
+	}
+	fmt.Println("✓ Added RSA recipient to builder")
+
+	// Add both PDF and DOCX files
+	if err := addDataFile(builder, testPDFPath); err != nil {
+		return "", fmt.Errorf("failed to add PDF file: %w", err)
+	}
+
+	if err := addDataFile(builder, testDOCXPath); err != nil {
+		return "", fmt.Errorf("failed to add DOCX file: %w", err)
+	}
+
+	// Build CDOC
+	outputPath := "./TEST_MULTIPLE_FILES_RSA_encrypted.cdoc2"
+	if err := buildCDOC(builder, outputPath); err != nil {
+		return "", err
+	}
+
+	return outputPath, nil
+}
+
+func decryptWithPassword_CDOC2(cdocPath, outputDir string) error {
+	password := "test-password-123"
+
+	// Create decrypter
+	decrypter := cdoc.NewDecrypter()
+
+	// Load CDOC file
+	if err := decrypter.WithCDOCFromFile(cdocPath); err != nil {
+		return fmt.Errorf("failed to load CDOC file: %w", err)
+	}
+	fmt.Printf("✓ Loaded CDOC file: %s\n", cdocPath)
+
+	// Set password
+	decrypter.WithPassword(password)
+	fmt.Println("✓ Set password for decryption")
+
+	// Decrypt
+	decryptedFiles, err := decrypter.Decrypt()
+	if err != nil {
+		return fmt.Errorf("failed to decrypt: %w", err)
+	}
+	fmt.Printf("✓ Decrypted %d file(s)\n", len(decryptedFiles))
+
+	// Ensure output directory exists
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return fmt.Errorf("failed to create output directory: %w", err)
+	}
+
+	// Write decrypted files
+	for _, decryptedFile := range decryptedFiles {
+		outputPath := filepath.Join(outputDir, decryptedFile.Name)
+		if err := os.WriteFile(outputPath, decryptedFile.Content, 0644); err != nil {
+			return fmt.Errorf("failed to write decrypted file: %w", err)
+		}
+		fmt.Printf("✓ Wrote decrypted file: %s (%d bytes)\n", outputPath, len(decryptedFile.Content))
+	}
+
+	return nil
 }
 
 func repeatChar(c string, n int) string {

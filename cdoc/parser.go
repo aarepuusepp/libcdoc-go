@@ -10,9 +10,9 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 
-	"github.com/yourorg/cdoc1-go/internal"
-	"github.com/yourorg/cdoc1-go/xmlenc"
-	"github.com/yourorg/cdoc1-go/cert"
+	"github.com/aarepuusepp/libcdoc-go/v2/internal"
+	"github.com/aarepuusepp/libcdoc-go/v2/xmlenc"
+	"github.com/aarepuusepp/libcdoc-go/v2/cert"
 )
 
 // Parser implements XML parsing for CDOC documents

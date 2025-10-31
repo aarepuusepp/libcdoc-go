@@ -3,7 +3,7 @@ package key
 import (
 	"crypto/x509"
 
-	"github.com/yourorg/cdoc1-go/internal"
+	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 	"software.sslmate.com/src/go-pkcs12"
 )
 

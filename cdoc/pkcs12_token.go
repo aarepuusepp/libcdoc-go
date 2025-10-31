@@ -4,9 +4,9 @@ import (
 	"crypto/ecdsa"
 	"crypto/x509"
 
-	"github.com/yourorg/cdoc1-go/crypto"
-	"github.com/yourorg/cdoc1-go/internal"
-	"github.com/yourorg/cdoc1-go/key"
+	"github.com/aarepuusepp/libcdoc-go/v2/crypto"
+	"github.com/aarepuusepp/libcdoc-go/v2/internal"
+	"github.com/aarepuusepp/libcdoc-go/v2/key"
 )
 
 // PKCS12Token implements the Token interface for PKCS#12 keystores

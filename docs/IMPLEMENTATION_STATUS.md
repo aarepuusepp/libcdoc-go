@@ -5,11 +5,17 @@
 ### Core Functionality
 - ✅ CDOC 1.0 and 1.1 parsing
 - ✅ CDOC 1.1 generation (AES-256-GCM)
-- ✅ **CDOC 1.0 generation (AES-128-CBC)** - ✅ **NEWLY IMPLEMENTED**
+- ✅ **CDOC 1.0 generation (AES-128-CBC)** - ✅ **IMPLEMENTED**
+- ✅ **CDOC 2.0 support** - ✅ **FULLY IMPLEMENTED**
+  - Binary format with FlatBuffers header
+  - ChaCha20-Poly1305 payload encryption
+  - RSA, ECC, Password (PBKDF2), and Symmetric key recipients
+  - Multiple files support via TAR archive
+  - PKCS#12 token support for decryption
 - ✅ RSA recipient support (PKCS#1 v1.5)
 - ✅ EC recipient support (ECDH-ES + ConcatKDF + AES-KW-256)
 - ✅ Multiple recipients support
-- ✅ **DDOC multi-file support** - ✅ **NEWLY IMPLEMENTED**
+- ✅ **DDOC multi-file support** - ✅ **IMPLEMENTED**
   - Encryption of multiple files (DDOC XML structure)
   - Decryption of multiple files (DDOC XML parsing)
 
@@ -21,6 +27,9 @@
 - ✅ ECDH key agreement (secp384r1)
 - ✅ ConcatKDF key derivation (SHA-512)
 - ✅ Padding utilities (X.923, PKCS#7)
+- ✅ **HKDF (HMAC-based Key Derivation Function)** - ✅ **CDOC2**
+- ✅ **ChaCha20-Poly1305 authenticated encryption** - ✅ **CDOC2**
+- ✅ **PBKDF2 password-based key derivation** - ✅ **CDOC2**
 
 ### Certificate and Key Handling
 - ✅ X.509 certificate parsing (PEM/DER)
@@ -34,6 +43,10 @@
 - ✅ Parser tests with real CDOC files from cdoc4j
 - ✅ DDOC multi-file tests
 - ✅ CDOC 1.0 generation tests
+- ✅ CDOC 2.0 round-trip tests (RSA, ECC, Password, Symmetric key)
+- ✅ CDOC 2.0 multiple files tests
+- ✅ CDOC 2.0 multiple recipients tests
+- ✅ CDOC 2.0 PKCS#12 token decryption tests
 - ✅ Multiple recipients tests
 - ✅ Edge case tests (empty files, large files)
 
@@ -102,6 +115,38 @@ All tests passing:
 - No external test resources needed for basic functionality
 - Uses Go standard library where possible
 
+## CDOC 2.0 Implementation
+
+### Completed Features
+- ✅ Binary format with FlatBuffers header
+- ✅ Magic label detection ("CDOC\x02")
+- ✅ Header parsing and HMAC verification
+- ✅ FMK (File Master Key) extraction for all recipient types
+- ✅ Payload decryption (ChaCha20-Poly1305 + TAR archive)
+- ✅ FMK generation and recipient processing
+- ✅ Header building with FlatBuffers serialization
+- ✅ Payload encryption (TAR archive + ChaCha20-Poly1305)
+- ✅ RSA recipient support (CDOC 2.0)
+- ✅ ECC recipient support (CDOC 2.0, secp384r1)
+- ✅ Password-based recipient support (PBKDF2)
+- ✅ Symmetric key recipient support
+- ✅ Multiple files support (TAR archive)
+- ✅ Multiple recipients support
+- ✅ PKCS#12 token support for decryption
+- ✅ CLI tool support (cdoc-cli)
+- ✅ Comprehensive test application (cdoc-test)
+
+### Files Added/Modified
+- `cdoc/version.go` - Added Version20 constant and detection
+- `cdoc/cdoc2/` - Complete CDOC2 implementation package
+- `cdoc/cdoc2/schema/` - FlatBuffers generated code
+- `cdoc/builder.go` - Extended with CDOC2 support
+- `cdoc/decrypter.go` - Extended with CDOC2 support
+- `crypto/hkdf.go` - HKDF implementation
+- `crypto/chacha20poly1305.go` - ChaCha20-Poly1305 wrapper
+- `cli-tools/cdoc-cli/` - CLI tool with CDOC2 support
+- `cli-tools/cdoc-test/` - Comprehensive test application
+
 ## Next Steps (Optional Enhancements)
 
 ### Potential Improvements
@@ -109,7 +154,8 @@ All tests passing:
 2. Fuzzing tests for XML parsing (using `go-fuzz`)
 3. Performance benchmarks
 4. Additional edge case testing
-5. CDOC 2.0 support (future)
+5. Key Server support (Smart-ID/Mobile-ID) - Schema supported, not yet implemented
+6. Key Shares support - Schema supported, not yet implemented
 
 ### Documentation
 - ✅ API documentation
@@ -119,13 +165,17 @@ All tests passing:
 
 ## Summary
 
-**Status**: ✅ **All Known Limitations Removed**
+**Status**: ✅ **CDOC 1.x and 2.0 Fully Supported**
 
 The library now provides:
 - Full CDOC 1.0 and 1.1 support (encryption and decryption)
+- **Full CDOC 2.0 support (encryption and decryption)**
 - Complete DDOC multi-file support
+- Multiple recipient types (RSA, ECC, Password, Symmetric Key)
+- PKCS#12 token support for all ES
 - Comprehensive test coverage
 - Verified interoperability with cdoc4j
+- CLI tools for encryption/decryption
 
-The implementation is production-ready for the MVP scope.
+The implementation is production-ready and supports all major CDOC formats.
 

@@ -3,7 +3,7 @@ package cert
 import (
 	"crypto/x509"
 	"fmt"
-	"github.com/yourorg/cdoc1-go/internal"
+	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 )
 
 // ValidateKeyUsage validates that a certificate has the appropriate key usage for RSA or EC encryption

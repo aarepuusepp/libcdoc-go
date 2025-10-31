@@ -1,7 +1,7 @@
 package key
 
 import (
-	"github.com/yourorg/cdoc1-go/internal"
+	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 )
 
 // NewPKCS11Error creates a new PKCS#11-related error (wrapper for internal.NewPKCS11Error)

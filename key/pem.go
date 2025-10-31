@@ -7,7 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"github.com/yourorg/cdoc1-go/internal"
+	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 )
 
 // ParsePrivateKeyPEM parses a private key from PEM format
