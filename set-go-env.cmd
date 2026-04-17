@@ -21,7 +21,8 @@ set GONOSUMDB=
 set GOOS=windows
 set GOPATH=C:\Users\%username%\go
 set GOPRIVATE=
-set GOPROXY=https://proxy.golang.org,direct
+REM set GOPROXY=https://proxy.golang.org,direct
+set GOPROXY=http://artifacts.smit.sise/artifactory/api/go/go,direct
 
 set GOSUMDB=sum.golang.org
 set GOTMPDIR=

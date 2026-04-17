@@ -1,6 +1,6 @@
 module github.com/aarepuusepp/libcdoc-go/v2
 
-go 1.24.2
+go 1.26.1
 
 require (
 	github.com/miekg/pkcs11 v1.1.1

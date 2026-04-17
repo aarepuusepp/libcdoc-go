@@ -34,7 +34,7 @@ Go library for Estonian CDOC encryption/decryption supporting CDOC 1.0, 1.1, and
 ### From Public Repository (when published)
 
 ```bash
-go get github.com/aarepuusepp/libcdoc-go/v2/v2
+go get github.com/aarepuusepp/libcdoc-go/v2
 ```
 
 ### Using Locally Without Publishing

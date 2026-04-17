@@ -1,3 +1,6 @@
+//go:build cgo
+// +build cgo
+
 package cdoc
 
 import (
