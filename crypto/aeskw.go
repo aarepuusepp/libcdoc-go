@@ -2,11 +2,15 @@ package crypto
 
 import (
 	"crypto/aes"
+	"crypto/subtle"
+	"encoding/binary"
 	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 )
 
 // AESKW256 implements AES Key Wrap (RFC 3394) for 256-bit keys
 // This wraps/unwraps a 256-bit key using AES-KW with a 256-bit wrapping key
+
+var rfc3394DefaultIV = [8]byte{0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6, 0xA6}
 
 // WrapAES256 wraps a 256-bit key using AES-KW-256 (RFC 3394)
 func WrapAES256(keyToWrap []byte, wrappingKey []byte) ([]byte, error) {
@@ -17,74 +21,57 @@ func WrapAES256(keyToWrap []byte, wrappingKey []byte) ([]byte, error) {
 		return nil, internal.NewEncryptionError("wrapping key must be 32 bytes", nil)
 	}
 
-	block, err := aes.NewCipher(wrappingKey)
+	return wrapRFC3394(wrappingKey, keyToWrap)
+}
+
+func wrapRFC3394(kek []byte, plaintext []byte) ([]byte, error) {
+	if len(plaintext) < 16 || len(plaintext)%8 != 0 {
+		return nil, internal.NewEncryptionError("plaintext length must be a multiple of 8 bytes and at least 16 bytes", nil)
+	}
+	if len(kek) != 16 && len(kek) != 24 && len(kek) != 32 {
+		return nil, internal.NewEncryptionError("wrapping key must be 16, 24, or 32 bytes", nil)
+	}
+
+	block, err := aes.NewCipher(kek)
 	if err != nil {
 		return nil, internal.NewEncryptionError("failed to create AES cipher", err)
 	}
 
-	// RFC 3394: Wrap 32 bytes (4 blocks of 64 bits each) with AES-256
-	// Split key into 4 blocks of 8 bytes each
-	A := make([]byte, 8) // Initial value: AIV (Alternative Initial Value) = A65959A6 for AES-256
-	A[0] = 0xA6
-	A[1] = 0x59
-	A[2] = 0x59
-	A[3] = 0xA6
-	A[4] = 0x00
-	A[5] = 0x00
-	A[6] = 0x00
-	A[7] = 0x00
+	n := len(plaintext) / 8
 
-	R := make([][]byte, 4)
-	R[0] = make([]byte, 8)
-	R[1] = make([]byte, 8)
-	R[2] = make([]byte, 8)
-	R[3] = make([]byte, 8)
-	copy(R[0], keyToWrap[0:8])
-	copy(R[1], keyToWrap[8:16])
-	copy(R[2], keyToWrap[16:24])
-	copy(R[3], keyToWrap[24:32])
+	// A = IV (RFC 3394 default)
+	A := make([]byte, 8)
+	copy(A, rfc3394DefaultIV[:])
 
-	// RFC 3394: 6 rounds for n=4 blocks
+	R := make([][]byte, n)
+	for i := 0; i < n; i++ {
+		R[i] = make([]byte, 8)
+		copy(R[i], plaintext[i*8:(i+1)*8])
+	}
+
+	// RFC 3394: 6 rounds for n blocks
 	for j := 0; j < 6; j++ {
-		for i := 0; i < 4; i++ {
-			// t = n*j + i + 1 = 4*j + i + 1
-			t := uint64(4*j + i + 1)
+		for i := 0; i < n; i++ {
+			// t = n*j + (i+1)
+			t := uint64(n*j + i + 1)
 
-			// B = AES(K, A | R[i])
-			B := make([]byte, 16)
+			var B [16]byte
 			copy(B[:8], A)
 			copy(B[8:], R[i])
+			block.Encrypt(B[:], B[:])
 
-			block.Encrypt(B, B)
-
-			// A = MSB(64, B) XOR t
-			copy(A, B[:8])
-			tBytes := make([]byte, 8)
-			tBytes[7] = byte(t & 0xFF)
-			tBytes[6] = byte((t >> 8) & 0xFF)
-			tBytes[5] = byte((t >> 16) & 0xFF)
-			tBytes[4] = byte((t >> 24) & 0xFF)
-			tBytes[3] = byte((t >> 32) & 0xFF)
-			tBytes[2] = byte((t >> 40) & 0xFF)
-			tBytes[1] = byte((t >> 48) & 0xFF)
-			tBytes[0] = byte((t >> 56) & 0xFF)
-			for k := 0; k < 8; k++ {
-				A[k] ^= tBytes[k]
-			}
-
-			// R[i] = LSB(64, B)
+			a := binary.BigEndian.Uint64(B[:8]) ^ t
+			binary.BigEndian.PutUint64(A, a)
 			copy(R[i], B[8:])
 		}
 	}
 
-	// Output: A | R[0] | R[1] | R[2] | R[3] = 40 bytes
-	wrapped := make([]byte, 40)
+	// Output: C = A | R[1] | ... | R[n]  => (n+1)*8 bytes
+	wrapped := make([]byte, 8+(8*n))
 	copy(wrapped[:8], A)
-	copy(wrapped[8:16], R[0])
-	copy(wrapped[16:24], R[1])
-	copy(wrapped[24:32], R[2])
-	copy(wrapped[32:40], R[3])
-
+	for i := 0; i < n; i++ {
+		copy(wrapped[8+i*8:8+(i+1)*8], R[i])
+	}
 	return wrapped, nil
 }
 
@@ -97,72 +84,67 @@ func UnwrapAES256(wrappedKey []byte, wrappingKey []byte) ([]byte, error) {
 		return nil, internal.NewDecryptionError("wrapping key must be 32 bytes", nil)
 	}
 
-	block, err := aes.NewCipher(wrappingKey)
+	plaintext, err := unwrapRFC3394(wrappingKey, wrappedKey)
+	if err != nil {
+		return nil, err
+	}
+	if len(plaintext) != 32 {
+		return nil, internal.NewDecryptionError("unwrapped key must be 32 bytes", nil)
+	}
+	return plaintext, nil
+}
+
+func unwrapRFC3394(kek []byte, ciphertext []byte) ([]byte, error) {
+	if len(ciphertext) < 24 || len(ciphertext)%8 != 0 {
+		return nil, internal.NewDecryptionError("wrapped key length must be a multiple of 8 bytes and at least 24 bytes", nil)
+	}
+	if len(kek) != 16 && len(kek) != 24 && len(kek) != 32 {
+		return nil, internal.NewDecryptionError("wrapping key must be 16, 24, or 32 bytes", nil)
+	}
+
+	block, err := aes.NewCipher(kek)
 	if err != nil {
 		return nil, internal.NewDecryptionError("failed to create AES cipher", err)
 	}
 
-	// Split wrapped key: A (8 bytes) | R[0] | R[1] | R[2] | R[3] (each 8 bytes) = 40 bytes
+	n := (len(ciphertext) / 8) - 1
+
+	// Split wrapped key: A (8 bytes) | R[0..n-1] (each 8 bytes)
 	A := make([]byte, 8)
-	copy(A, wrappedKey[:8])
+	copy(A, ciphertext[:8])
 
-	R := make([][]byte, 4)
-	R[0] = make([]byte, 8)
-	R[1] = make([]byte, 8)
-	R[2] = make([]byte, 8)
-	R[3] = make([]byte, 8)
-	copy(R[0], wrappedKey[8:16])
-	copy(R[1], wrappedKey[16:24])
-	copy(R[2], wrappedKey[24:32])
-	copy(R[3], wrappedKey[32:40])
+	R := make([][]byte, n)
+	for i := 0; i < n; i++ {
+		R[i] = make([]byte, 8)
+		copy(R[i], ciphertext[8+i*8:8+(i+1)*8])
+	}
 
-	// RFC 3394: 6 rounds in reverse for n=4 blocks
+	// RFC 3394: 6 rounds in reverse
 	for j := 5; j >= 0; j-- {
-		for i := 3; i >= 0; i-- {
-			// t = n*j + i + 1 = 4*j + i + 1
-			t := uint64(4*j + i + 1)
+		for i := n - 1; i >= 0; i-- {
+			// t = n*j + (i+1)
+			t := uint64(n*j + i + 1)
 
-			// XOR t with A
-			tBytes := make([]byte, 8)
-			tBytes[7] = byte(t & 0xFF)
-			tBytes[6] = byte((t >> 8) & 0xFF)
-			tBytes[5] = byte((t >> 16) & 0xFF)
-			tBytes[4] = byte((t >> 24) & 0xFF)
-			tBytes[3] = byte((t >> 32) & 0xFF)
-			tBytes[2] = byte((t >> 40) & 0xFF)
-			tBytes[1] = byte((t >> 48) & 0xFF)
-			tBytes[0] = byte((t >> 56) & 0xFF)
-			for k := 0; k < 8; k++ {
-				A[k] ^= tBytes[k]
-			}
+			a := binary.BigEndian.Uint64(A) ^ t
+			binary.BigEndian.PutUint64(A, a)
 
-			// B = AES-1(K, A | R[i])
-			B := make([]byte, 16)
+			var B [16]byte
 			copy(B[:8], A)
 			copy(B[8:], R[i])
+			block.Decrypt(B[:], B[:])
 
-			block.Decrypt(B, B)
-
-			// A = MSB(64, B)
 			copy(A, B[:8])
-
-			// R[i] = LSB(64, B)
 			copy(R[i], B[8:])
 		}
 	}
 
-	// Verify AIV
-	if A[0] != 0xA6 || A[1] != 0x59 || A[2] != 0x59 || A[3] != 0xA6 {
-		return nil, internal.NewDecryptionError("invalid AIV in wrapped key", nil)
+	if subtle.ConstantTimeCompare(A, rfc3394DefaultIV[:]) != 1 {
+		return nil, internal.NewDecryptionError("invalid initial value in wrapped key", nil)
 	}
 
-	// Reconstruct unwrapped key: R[0] | R[1] | R[2] | R[3] = 32 bytes
-	unwrapped := make([]byte, 32)
-	copy(unwrapped[0:8], R[0])
-	copy(unwrapped[8:16], R[1])
-	copy(unwrapped[16:24], R[2])
-	copy(unwrapped[24:32], R[3])
-
-	return unwrapped, nil
+	plaintext := make([]byte, 8*n)
+	for i := 0; i < n; i++ {
+		copy(plaintext[i*8:(i+1)*8], R[i])
+	}
+	return plaintext, nil
 }
-

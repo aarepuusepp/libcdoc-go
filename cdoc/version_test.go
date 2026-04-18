@@ -2,6 +2,8 @@ package cdoc
 
 import (
 	"testing"
+
+	libcdocroot "github.com/aarepuusepp/libcdoc-go/v2"
 )
 
 func TestDetectVersion(t *testing.T) {
@@ -61,10 +63,14 @@ func TestVersion_String(t *testing.T) {
 }
 
 func TestLibraryVersion(t *testing.T) {
-	if LibraryVersion != "2.0.0.1" {
-		t.Errorf("LibraryVersion = %s, want '2.0.0.1'", LibraryVersion)
+	if libcdocroot.Version == "" {
+		t.Fatalf("embedded VERSION is empty")
 	}
-	if LibraryVersionProperty != "libcdoc-go|2.0.0.1" {
-		t.Errorf("LibraryVersionProperty = %s, want 'libcdoc-go|2.0.0.1'", LibraryVersionProperty)
+	if LibraryVersion != libcdocroot.Version {
+		t.Errorf("LibraryVersion = %s, want %s", LibraryVersion, libcdocroot.Version)
+	}
+	wantProp := "libcdoc-go|" + libcdocroot.Version
+	if LibraryVersionProperty != wantProp {
+		t.Errorf("LibraryVersionProperty = %s, want %s", LibraryVersionProperty, wantProp)
 	}
 }

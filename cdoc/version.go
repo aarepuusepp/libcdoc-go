@@ -4,15 +4,15 @@ import (
 	"io"
 	"strings"
 
+	libcdocroot "github.com/aarepuusepp/libcdoc-go/v2"
 	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 )
 
-// LibraryVersion is the version of this library
-// Dev note: bump the 4th digit on each local/dev change to make it obvious which revision is running.
-const LibraryVersion = "2.0.0.1"
+// LibraryVersion is the version of this library, sourced from the root VERSION file.
+var LibraryVersion = libcdocroot.Version
 
 // LibraryVersionProperty is the CDOC metadata format "<name>|<version>".
-const LibraryVersionProperty = "libcdoc-go|" + LibraryVersion
+var LibraryVersionProperty = "libcdoc-go|" + LibraryVersion
 
 // Version represents CDOC format version
 type Version string
