@@ -61,8 +61,10 @@ func TestVersion_String(t *testing.T) {
 }
 
 func TestLibraryVersion(t *testing.T) {
-	if LibraryVersion != "2.0.0" {
-		t.Errorf("LibraryVersion = %s, want '2.0.0'", LibraryVersion)
+	if LibraryVersion != "2.0.0.1" {
+		t.Errorf("LibraryVersion = %s, want '2.0.0.1'", LibraryVersion)
+	}
+	if LibraryVersionProperty != "libcdoc-go|2.0.0.1" {
+		t.Errorf("LibraryVersionProperty = %s, want 'libcdoc-go|2.0.0.1'", LibraryVersionProperty)
 	}
 }
-

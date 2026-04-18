@@ -1,8 +1,8 @@
 package xmlenc
 
 import (
-	"crypto/x509"
 	"crypto/ecdsa"
+	"crypto/x509"
 	"encoding/base64"
 )
 
@@ -16,8 +16,8 @@ type Recipient interface {
 
 // RSARecipient represents an RSA recipient
 type RSARecipient struct {
-	Certificate *x509.Certificate
-	CN          string
+	Certificate  *x509.Certificate
+	CN           string
 	EncryptedKey []byte // Base64-encoded encrypted transport key
 }
 
@@ -33,13 +33,14 @@ func (r *RSARecipient) GetCN() string {
 
 // ECRecipient represents an EC recipient
 type ECRecipient struct {
-	Certificate      *x509.Certificate
-	CN               string
+	Certificate        *x509.Certificate
+	CN                 string
 	EphemeralPublicKey *ecdsa.PublicKey
-	AlgorithmID      []byte
-	PartyUInfo       []byte
-	PartyVInfo       []byte
-	EncryptedKey     []byte // Base64-encoded wrapped transport key
+	AlgorithmID        []byte
+	PartyUInfo         []byte
+	PartyVInfo         []byte
+	DigestAlgorithm    string
+	EncryptedKey       []byte // Base64-encoded wrapped transport key
 }
 
 // GetCertificate returns the recipient's certificate
@@ -70,6 +71,11 @@ func (r *ECRecipient) GetPartyUInfo() []byte {
 // GetPartyVInfo returns the PartyVInfo bytes
 func (r *ECRecipient) GetPartyVInfo() []byte {
 	return r.PartyVInfo
+}
+
+// GetDigestAlgorithm returns the digest algorithm URI used for ConcatKDF.
+func (r *ECRecipient) GetDigestAlgorithm() string {
+	return r.DigestAlgorithm
 }
 
 // GetEncryptedKey returns the encrypted/wrapped key (decoded from base64)

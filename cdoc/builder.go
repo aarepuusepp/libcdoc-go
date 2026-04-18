@@ -6,7 +6,7 @@ import (
 
 	"crypto/x509"
 
-    c2 "github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2"
+	c2 "github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2"
 	c2keyserver "github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2/keyserver"
 	"github.com/aarepuusepp/libcdoc-go/v2/cert"
 	"github.com/aarepuusepp/libcdoc-go/v2/internal"
@@ -14,22 +14,22 @@ import (
 
 // PasswordRecipient holds password and iterations for CDOC 2.0
 type PasswordRecipient struct {
-	Password    string
-	Iterations  int32
+	Password   string
+	Iterations int32
 }
 
 // Builder implements the fluent API for building CDOC encrypted documents
 type Builder struct {
-	version       Version
-	dataFiles     []DataFile
-	recipients    []*x509.Certificate
-	passwords     []PasswordRecipient
-	symmetricKeys [][]byte
-	keyServerRecipients []KeyServerRecipient // For CDOC 2.0 key server recipients
-	keyServerClient interface{}              // *cdoc2/keyserver.Client - set via SetKeyServerClient
-	keyServerConfigs map[string]interface{}  // map[serverID]*cdoc2/keyserver.KeyServerConfig
-	output        io.Writer
-	outputFile    string
+	version             Version
+	dataFiles           []DataFile
+	recipients          []*x509.Certificate
+	passwords           []PasswordRecipient
+	symmetricKeys       [][]byte
+	keyServerRecipients []KeyServerRecipient   // For CDOC 2.0 key server recipients
+	keyServerClient     interface{}            // *cdoc2/keyserver.Client - set via SetKeyServerClient
+	keyServerConfigs    map[string]interface{} // map[serverID]*cdoc2/keyserver.KeyServerConfig
+	output              io.Writer
+	outputFile          string
 }
 
 // KeyServerRecipient holds certificate and key server configuration for CDOC 2.0
@@ -199,71 +199,71 @@ func (b *Builder) BuildToWriter(w io.Writer) error {
 		return err
 	}
 
-    if b.version == Version20 {
-        // CDOC 2.0 writer path
-        writer := c2.NewWriter(w)
-        
-        // Configure key server client and configs if provided
-        if b.keyServerClient != nil {
-            if client, ok := b.keyServerClient.(*c2keyserver.Client); ok {
-                writer.SetKeyServerClient(client)
-            }
-        }
-        if b.keyServerConfigs != nil {
-            for _, configInterface := range b.keyServerConfigs {
-                if config, ok := configInterface.(c2keyserver.KeyServerConfig); ok {
-                    writer.AddKeyServerConfig(config)
-                }
-            }
-        }
-        
-        // Map certificate recipients (regular, not key server)
-        for _, rc := range b.recipients {
-            if err := writer.AddRecipient(c2.Recipient{Certificate: rc}); err != nil {
-                return err
-            }
-        }
-        // Map key server recipients
-        for _, ksr := range b.keyServerRecipients {
-            if err := writer.AddRecipient(c2.Recipient{
-                Certificate: ksr.Certificate,
-                ServerID:    ksr.ServerID,
-                Label:       ksr.Label,
-                ExpiryTime:  ksr.ExpiryTime,
-            }); err != nil {
-                return err
-            }
-        }
-        // Map password recipients
-        for _, pwd := range b.passwords {
-            if err := writer.AddRecipient(c2.Recipient{Password: pwd.Password, KDFIterations: pwd.Iterations}); err != nil {
-                return err
-            }
-        }
-        // Map symmetric key recipients
-        for _, key := range b.symmetricKeys {
-            if err := writer.AddRecipient(c2.Recipient{SymmetricKey: key}); err != nil {
-                return err
-            }
-        }
-        if err := writer.BeginEncryption(); err != nil {
-            return err
-        }
-        // Map data files to cdoc2.DataFile
-        files := make([]c2.DataFile, 0, len(b.dataFiles))
-        for _, df := range b.dataFiles {
-            files = append(files, c2.DataFile{
-                Name:    df.Name,
-                Content: df.Content,
-                Size:    df.Size,
-                MimeType: df.MimeType,
-            })
-        }
-        if err := writer.WriteEncryptedData(files); err != nil {
-            return err
-        }
-        return writer.FinishEncryption()
-    }
+	if b.version == Version20 {
+		// CDOC 2.0 writer path
+		writer := c2.NewWriter(w)
+
+		// Configure key server client and configs if provided
+		if b.keyServerClient != nil {
+			if client, ok := b.keyServerClient.(*c2keyserver.Client); ok {
+				writer.SetKeyServerClient(client)
+			}
+		}
+		if b.keyServerConfigs != nil {
+			for _, configInterface := range b.keyServerConfigs {
+				if config, ok := configInterface.(c2keyserver.KeyServerConfig); ok {
+					writer.AddKeyServerConfig(config)
+				}
+			}
+		}
+
+		// Map certificate recipients (regular, not key server)
+		for _, rc := range b.recipients {
+			if err := writer.AddRecipient(c2.Recipient{Certificate: rc}); err != nil {
+				return err
+			}
+		}
+		// Map key server recipients
+		for _, ksr := range b.keyServerRecipients {
+			if err := writer.AddRecipient(c2.Recipient{
+				Certificate: ksr.Certificate,
+				ServerID:    ksr.ServerID,
+				Label:       ksr.Label,
+				ExpiryTime:  ksr.ExpiryTime,
+			}); err != nil {
+				return err
+			}
+		}
+		// Map password recipients
+		for _, pwd := range b.passwords {
+			if err := writer.AddRecipient(c2.Recipient{Password: pwd.Password, KDFIterations: pwd.Iterations}); err != nil {
+				return err
+			}
+		}
+		// Map symmetric key recipients
+		for _, key := range b.symmetricKeys {
+			if err := writer.AddRecipient(c2.Recipient{SymmetricKey: key}); err != nil {
+				return err
+			}
+		}
+		if err := writer.BeginEncryption(); err != nil {
+			return err
+		}
+		// Map data files to cdoc2.DataFile
+		files := make([]c2.DataFile, 0, len(b.dataFiles))
+		for _, df := range b.dataFiles {
+			files = append(files, c2.DataFile{
+				Name:     df.Name,
+				Content:  df.Content,
+				Size:     df.Size,
+				MimeType: df.MimeType,
+			})
+		}
+		if err := writer.WriteEncryptedData(files); err != nil {
+			return err
+		}
+		return writer.FinishEncryption()
+	}
 
 	composer := NewComposer()
 	composer.SetVersion(b.version)
@@ -296,6 +296,9 @@ func (b *Builder) validateParameters() error {
 	}
 
 	totalRecipients := len(b.recipients) + len(b.passwords) + len(b.symmetricKeys)
+	if b.version == Version20 {
+		totalRecipients += len(b.keyServerRecipients)
+	}
 	if totalRecipients == 0 {
 		return internal.NewValidationError("CDOC must contain at least 1 recipient", nil)
 	}

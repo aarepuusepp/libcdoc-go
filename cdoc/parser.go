@@ -4,15 +4,15 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"io"
-	"strings"
 	"math/big"
+	"strings"
 
 	"crypto/ecdsa"
 	"crypto/elliptic"
 
+	"github.com/aarepuusepp/libcdoc-go/v2/cert"
 	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 	"github.com/aarepuusepp/libcdoc-go/v2/xmlenc"
-	"github.com/aarepuusepp/libcdoc-go/v2/cert"
 )
 
 // Parser implements XML parsing for CDOC documents
@@ -29,7 +29,7 @@ func NewParser() *Parser {
 func (p *Parser) Parse(r io.Reader) error {
 	decoder := xml.NewDecoder(r)
 	decoder.Strict = false // Allow some flexibility in parsing
-	
+
 	var encryptedData xmlenc.EncryptedData
 	if err := decoder.Decode(&encryptedData); err != nil {
 		return internal.NewParseError("failed to parse CDOC XML", err)
@@ -161,6 +161,8 @@ func (p *Parser) parseECRecipient(encryptedKey *xmlenc.EncryptedKey) (*xmlenc.EC
 		return nil, internal.NewParseError("failed to decode PartyVInfo", err)
 	}
 
+	digestAlg := params.DigestMethod.Algorithm
+
 	// Parse ephemeral public key
 	if agreementMethod.OriginatorKeyInfo == nil || agreementMethod.OriginatorKeyInfo.KeyValue == nil ||
 		agreementMethod.OriginatorKeyInfo.KeyValue.ECKeyValue == nil {
@@ -195,13 +197,14 @@ func (p *Parser) parseECRecipient(encryptedKey *xmlenc.EncryptedKey) (*xmlenc.EC
 	encryptedKeyBytes := []byte(encryptedKeyBase64) // Store as base64 string for now
 
 	return &xmlenc.ECRecipient{
-		Certificate:       recipientCert,
-		CN:                cn,
+		Certificate:        recipientCert,
+		CN:                 cn,
 		EphemeralPublicKey: ephemeralPubKey,
-		AlgorithmID:       algorithmID,
-		PartyUInfo:        partyUInfo,
-		PartyVInfo:        partyVInfo,
-		EncryptedKey:     encryptedKeyBytes,
+		AlgorithmID:        algorithmID,
+		PartyUInfo:         partyUInfo,
+		PartyVInfo:         partyVInfo,
+		DigestAlgorithm:    digestAlg,
+		EncryptedKey:       encryptedKeyBytes,
 	}, nil
 }
 

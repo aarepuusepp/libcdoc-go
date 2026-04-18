@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -23,10 +24,10 @@ func createTestECCertificate(t *testing.T) (*x509.Certificate, *ecdsa.PrivateKey
 		Subject: pkix.Name{
 			CommonName: "Test EC User",
 		},
-		NotBefore:    time.Now(),
-		NotAfter:     time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:     x509.KeyUsageKeyAgreement,
-		PublicKey:    privKey.Public(),
+		NotBefore: time.Now(),
+		NotAfter:  time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:  x509.KeyUsageKeyAgreement,
+		PublicKey: privKey.Public(),
 	}
 
 	// Self-sign for testing
@@ -104,9 +105,8 @@ func TestConcatKDF(t *testing.T) {
 		t.Fatalf("ConcatKDF() error = %v", err)
 	}
 
-	// Derived keys should be identical (deterministic)
-	if len(derivedKey) != len(derivedKey2) {
-		t.Error("ConcatKDF() should produce same length keys for same inputs")
+	if !bytes.Equal(derivedKey, derivedKey2) {
+		t.Error("ConcatKDF() must be deterministic for identical inputs")
 	}
 }
 
@@ -134,6 +134,59 @@ func TestConcatKDF_DifferentInputs(t *testing.T) {
 	// Different AlgorithmID should produce different keys
 	if string(derivedKey1) == string(derivedKey2) {
 		t.Error("ConcatKDF() with different AlgorithmID should produce different keys")
+	}
+}
+
+func TestConcatKDFWithDigest_DigestSelectionAffectsOutput(t *testing.T) {
+	sharedSecret := make([]byte, 48)
+	for i := range sharedSecret {
+		sharedSecret[i] = byte(i)
+	}
+
+	algorithmID := []byte("ENCDOC-XML|1.1")
+	partyUInfo := make([]byte, 97)
+	partyUInfo[0] = 0x04
+	partyVInfo := make([]byte, 200)
+
+	k1, err := ConcatKDFWithDigest(sharedSecret, algorithmID, partyUInfo, partyVInfo, DigestSHA384URI, 32)
+	if err != nil {
+		t.Fatalf("ConcatKDFWithDigest sha384 error = %v", err)
+	}
+	k2, err := ConcatKDFWithDigest(sharedSecret, algorithmID, partyUInfo, partyVInfo, DigestSHA512URI, 32)
+	if err != nil {
+		t.Fatalf("ConcatKDFWithDigest sha512 error = %v", err)
+	}
+	if bytes.Equal(k1, k2) {
+		t.Fatal("Different digest algorithms must produce different KEK outputs")
+	}
+}
+
+func TestConcatKDFWithDigest_IteratesForLongerOutput(t *testing.T) {
+	sharedSecret := make([]byte, 48)
+	for i := range sharedSecret {
+		sharedSecret[i] = byte(i)
+	}
+
+	algorithmID := []byte("ENCDOC-XML|1.1")
+	partyUInfo := make([]byte, 97)
+	partyUInfo[0] = 0x04
+	partyVInfo := make([]byte, 200)
+
+	keyLen := 100 // longer than sha256 output (32), forces multiple blocks
+	k1, err := ConcatKDFWithDigest(sharedSecret, algorithmID, partyUInfo, partyVInfo, DigestSHA256URI, keyLen)
+	if err != nil {
+		t.Fatalf("ConcatKDFWithDigest sha256 error = %v", err)
+	}
+	if len(k1) != keyLen {
+		t.Fatalf("Expected %d bytes, got %d", keyLen, len(k1))
+	}
+
+	k2, err := ConcatKDFWithDigest(sharedSecret, algorithmID, partyUInfo, partyVInfo, DigestSHA256URI, keyLen)
+	if err != nil {
+		t.Fatalf("ConcatKDFWithDigest sha256 error = %v", err)
+	}
+	if !bytes.Equal(k1, k2) {
+		t.Fatal("ConcatKDFWithDigest must be deterministic for identical inputs")
 	}
 }
 
@@ -187,4 +240,3 @@ func TestGenerateECKeyPair(t *testing.T) {
 		t.Error("GenerateECKeyPair() private key should not be zero")
 	}
 }
-

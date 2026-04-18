@@ -3,6 +3,7 @@ package cdoc
 import (
 	"encoding/base64"
 	"encoding/xml"
+	"fmt"
 	"io"
 
 	"crypto/ecdsa"
@@ -25,18 +26,18 @@ const (
 
 // Composer implements XML composition for CDOC documents
 type Composer struct {
-	dataKey     []byte // AES-256 key for CDOC 1.1, AES-128 for CDOC 1.0
-	recipients  []*x509.Certificate
-	dataFiles   []DataFile
-	version     Version
+	dataKey    []byte // AES-256 key for CDOC 1.1, AES-128 for CDOC 1.0
+	recipients []*x509.Certificate
+	dataFiles  []DataFile
+	version    Version
 }
 
 // DataFile represents a file to be encrypted
 type DataFile struct {
-	Name        string
-	Content     io.Reader
-	Size        int64
-	MimeType    string
+	Name     string
+	Content  io.Reader
+	Size     int64
+	MimeType string
 }
 
 // NewComposer creates a new Composer instance
@@ -151,6 +152,9 @@ func (c *Composer) compose11(w io.Writer) error {
 	encryptedData.EncryptionProperties = props
 
 	// Write XML
+	if _, err := io.WriteString(w, xml.Header); err != nil {
+		return internal.NewEncryptionError("failed to write XML header", err)
+	}
 	encoder := xml.NewEncoder(w)
 	encoder.Indent("", "  ")
 	if err := encoder.Encode(encryptedData); err != nil {
@@ -236,6 +240,9 @@ func (c *Composer) compose10(w io.Writer) error {
 	encryptedData.EncryptionProperties = props
 
 	// Write XML
+	if _, err := io.WriteString(w, xml.Header); err != nil {
+		return internal.NewEncryptionError("failed to write XML header", err)
+	}
 	encoder := xml.NewEncoder(w)
 	encoder.Indent("", "  ")
 	if err := encoder.Encode(encryptedData); err != nil {
@@ -341,7 +348,7 @@ func (c *Composer) createECEncryptedKey(recipientCert *x509.Certificate, cn stri
 
 	// Build ConcatKDF parameters
 	algorithmID := []byte(ENCDOCXMLVersion11)
-	
+
 	// PartyUInfo: ephemeral public key bytes (from SubjectPublicKeyInfo)
 	partyUInfo, err := encodeECPublicKeyBytes(ephemeralPrivKey.PublicKey)
 	if err != nil {
@@ -411,31 +418,51 @@ func (c *Composer) createECEncryptedKey(recipientCert *x509.Certificate, cn stri
 	}, nil
 }
 
-// encodeECPublicKeyBytes encodes EC public key as raw point bytes (X + Y coordinates)
+// encodeECPublicKeyBytes encodes EC public key as an uncompressed EC point:
+// 0x04 || X || Y (RFC 5480 / SEC1).
 func encodeECPublicKeyBytes(pubKey ecdsa.PublicKey) ([]byte, error) {
-	// Encode as uncompressed point: 48 bytes X + 48 bytes Y = 96 bytes
+	if pubKey.Curve == nil || pubKey.X == nil || pubKey.Y == nil {
+		return nil, fmt.Errorf("encode EC public key: missing curve or coordinates")
+	}
+
+	coordLen := (pubKey.Curve.Params().BitSize + 7) / 8
+	if coordLen <= 0 {
+		return nil, fmt.Errorf("encode EC public key: invalid curve size")
+	}
+
 	xBytes := pubKey.X.Bytes()
 	yBytes := pubKey.Y.Bytes()
 
-	// Pad to 48 bytes each
-	result := make([]byte, 96)
-	copy(result[48-len(xBytes):48], xBytes)
-	copy(result[96-len(yBytes):], yBytes)
+	// Uncompressed point format: 1 byte prefix + X + Y.
+	result := make([]byte, 1+2*coordLen)
+	result[0] = 0x04
+
+	copy(result[1+coordLen-len(xBytes):1+coordLen], xBytes)
+	copy(result[1+2*coordLen-len(yBytes):], yBytes)
 
 	return result, nil
 }
 
 // encodeECPublicKeyBase64 encodes EC public key as base64 string
 func encodeECPublicKeyBase64(pubKey ecdsa.PublicKey) string {
-	bytes, _ := encodeECPublicKeyBytes(pubKey)
-	// Add 0x04 prefix for uncompressed format
-	fullBytes := append([]byte{0x04}, bytes...)
-	return base64.StdEncoding.EncodeToString(fullBytes)
+	b, err := encodeECPublicKeyBytes(pubKey)
+	if err != nil {
+		return ""
+	}
+	return base64.StdEncoding.EncodeToString(b)
 }
 
 // buildEncryptionProperties builds metadata properties
 func (c *Composer) buildEncryptionProperties() *xmlenc.EncryptionProperties {
 	props := []xmlenc.EncryptionProperty{}
+
+	// orig_file metadata (widely used by DigiDoc tooling).
+	for i, df := range c.dataFiles {
+		props = append(props, xmlenc.EncryptionProperty{
+			Name:    "orig_file",
+			Content: fmt.Sprintf("%s|%d|%s|D%d", df.Name, df.Size, df.MimeType, i),
+		})
+	}
 
 	// DocumentFormat
 	var formatVersion string
@@ -452,7 +479,7 @@ func (c *Composer) buildEncryptionProperties() *xmlenc.EncryptionProperties {
 	// LibraryVersion
 	props = append(props, xmlenc.EncryptionProperty{
 		Name:    "LibraryVersion",
-		Content: "cdoc1-go|0.1",
+		Content: LibraryVersionProperty,
 	})
 
 	// Filename (if single file)
@@ -467,4 +494,3 @@ func (c *Composer) buildEncryptionProperties() *xmlenc.EncryptionProperties {
 		Properties: props,
 	}
 }
-

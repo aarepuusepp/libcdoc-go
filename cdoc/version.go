@@ -8,7 +8,11 @@ import (
 )
 
 // LibraryVersion is the version of this library
-const LibraryVersion = "2.0.0"
+// Dev note: bump the 4th digit on each local/dev change to make it obvious which revision is running.
+const LibraryVersion = "2.0.0.1"
+
+// LibraryVersionProperty is the CDOC metadata format "<name>|<version>".
+const LibraryVersionProperty = "libcdoc-go|" + LibraryVersion
 
 // Version represents CDOC format version
 type Version string

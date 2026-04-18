@@ -4,30 +4,30 @@ import (
 	"io"
 	"os"
 
+	"bytes"
 	"crypto/x509"
-    "bytes"
 
-    "github.com/aarepuusepp/libcdoc-go/v2/crypto"
+	c2 "github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2"
+	c2keyserver "github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2/keyserver"
+	"github.com/aarepuusepp/libcdoc-go/v2/crypto"
 	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 	"github.com/aarepuusepp/libcdoc-go/v2/key"
 	"github.com/aarepuusepp/libcdoc-go/v2/xmlenc"
-    c2 "github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2"
-	c2keyserver "github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2/keyserver"
 )
 
 // Decrypter implements decryption of CDOC documents
 type Decrypter struct {
-	cdocReader    io.Reader
-	cdocFile      string
-	privateKey    *key.PrivateKey
-	token         Token              // Optional: token for decryption (PKCS#11, PKCS#12, etc.)
-	certificate   *x509.Certificate // Optional: for recipient selection when multiple recipients
-	password      string             // For password-based decryption (CDOC 2.0)
-	symmetricKey  []byte             // For symmetric key decryption (CDOC 2.0)
-	keyServerClient interface{}      // *cdoc2/keyserver.Client - set via SetKeyServerClient
+	cdocReader       io.Reader
+	cdocFile         string
+	privateKey       *key.PrivateKey
+	token            Token                  // Optional: token for decryption (PKCS#11, PKCS#12, etc.)
+	certificate      *x509.Certificate      // Optional: for recipient selection when multiple recipients
+	password         string                 // For password-based decryption (CDOC 2.0)
+	symmetricKey     []byte                 // For symmetric key decryption (CDOC 2.0)
+	keyServerClient  interface{}            // *cdoc2/keyserver.Client - set via SetKeyServerClient
 	keyServerConfigs map[string]interface{} // map[serverID]*cdoc2/keyserver.KeyServerConfig
-	outputDir     string
-	outputWriter  io.Writer
+	outputDir        string
+	outputWriter     io.Writer
 }
 
 // NewDecrypter creates a new Decrypter instance
@@ -110,9 +110,16 @@ func (d *Decrypter) AddKeyServerConfig(config interface{}) *Decrypter {
 	if d.keyServerConfigs == nil {
 		d.keyServerConfigs = make(map[string]interface{})
 	}
-	// config should be keyserver.KeyServerConfig with ServerID field
-	if cfg, ok := config.(interface{ GetServerID() string }); ok {
-		d.keyServerConfigs[cfg.GetServerID()] = config
+
+	switch cfg := config.(type) {
+	case c2keyserver.KeyServerConfig:
+		if cfg.ServerID != "" {
+			d.keyServerConfigs[cfg.ServerID] = cfg
+		}
+	case *c2keyserver.KeyServerConfig:
+		if cfg != nil && cfg.ServerID != "" {
+			d.keyServerConfigs[cfg.ServerID] = *cfg
+		}
 	}
 	return d
 }
@@ -170,42 +177,42 @@ func (d *Decrypter) Decrypt() ([]DecryptedFile, error) {
 		return nil, err
 	}
 
-    // Detect CDOC version (2.0 FlatBuffers vs 1.x XML)
-    var readerAt io.ReaderAt
-    if f, ok := d.cdocReader.(*os.File); ok {
-        readerAt = f
-    } else if d.cdocFile != "" {
-        f, err := os.Open(d.cdocFile)
-        if err != nil {
-            return nil, internal.NewDecryptionError("failed to reopen CDOC file", err)
-        }
-        defer f.Close()
-        readerAt = f
-    } else {
-        // Buffer into memory
-        data, err := io.ReadAll(d.cdocReader)
-        if err != nil {
-            return nil, internal.NewDecryptionError("failed to read CDOC data", err)
-        }
-        br := bytes.NewReader(data)
-        readerAt = br
-        // Reset cdocReader for later reads if needed
-        d.cdocReader = br
-    }
+	// Detect CDOC version (2.0 FlatBuffers vs 1.x XML)
+	var readerAt io.ReaderAt
+	if f, ok := d.cdocReader.(*os.File); ok {
+		readerAt = f
+	} else if d.cdocFile != "" {
+		f, err := os.Open(d.cdocFile)
+		if err != nil {
+			return nil, internal.NewDecryptionError("failed to reopen CDOC file", err)
+		}
+		defer f.Close()
+		readerAt = f
+	} else {
+		// Buffer into memory
+		data, err := io.ReadAll(d.cdocReader)
+		if err != nil {
+			return nil, internal.NewDecryptionError("failed to read CDOC data", err)
+		}
+		br := bytes.NewReader(data)
+		readerAt = br
+		// Reset cdocReader for later reads if needed
+		d.cdocReader = br
+	}
 
-    ver, err := DetectFileVersion(readerAt)
-    if err != nil {
-        return nil, err
-    }
-    if ver == Version20 {
-        return d.decryptCDOC2(readerAt)
-    }
+	ver, err := DetectFileVersion(readerAt)
+	if err != nil {
+		return nil, err
+	}
+	if ver == Version20 {
+		return d.decryptCDOC2(readerAt)
+	}
 
-    // Parse CDOC 1.x document
-    parser := NewParser()
-    if err := parser.Parse(d.cdocReader); err != nil {
-        return nil, err
-    }
+	// Parse CDOC 1.x document
+	parser := NewParser()
+	if err := parser.Parse(d.cdocReader); err != nil {
+		return nil, err
+	}
 
 	// Get recipients
 	recipients, err := parser.GetRecipients()
@@ -265,158 +272,188 @@ func (d *Decrypter) Decrypt() ([]DecryptedFile, error) {
 
 // decryptCDOC2 handles CDOC 2.0 containers
 func (d *Decrypter) decryptCDOC2(r io.ReaderAt) ([]DecryptedFile, error) {
-    rdr, err := c2.NewReader(r)
-    if err != nil {
-        return nil, err
-    }
-    
-    // Configure key server client and configs if provided
-    if d.keyServerClient != nil {
-        if client, ok := d.keyServerClient.(*c2keyserver.Client); ok {
-            rdr.SetKeyServerClient(client)
-        }
-    }
-    if d.keyServerConfigs != nil {
-        for _, configInterface := range d.keyServerConfigs {
-            if config, ok := configInterface.(c2keyserver.KeyServerConfig); ok {
-                rdr.AddKeyServerConfig(config)
-            }
-        }
-    }
-    
-    if _, err := rdr.ReadHeader(); err != nil {
-        return nil, err
-    }
+	rdr, err := c2.NewReader(r)
+	if err != nil {
+		return nil, err
+	}
 
-    // Map recipients to Locks and select one
-    locks, err := rdr.GetLocks()
-    if err != nil {
-        return nil, err
-    }
-    if len(locks) == 0 {
-        return nil, internal.NewDecryptionError("no recipients in CDOC2 header", nil)
-    }
+	// Configure key server client and configs if provided
+	if d.keyServerClient != nil {
+		if client, ok := d.keyServerClient.(*c2keyserver.Client); ok {
+			rdr.SetKeyServerClient(client)
+		}
+	}
+	if d.keyServerConfigs != nil {
+		for _, configInterface := range d.keyServerConfigs {
+			if config, ok := configInterface.(c2keyserver.KeyServerConfig); ok {
+				rdr.AddKeyServerConfig(config)
+			}
+		}
+	}
 
-    sel := 0
-    if d.certificate != nil {
-        // Try to find a lock that matches the certificate
-        for i := range locks {
-            ok, _ := locks[i].MatchesCertificate(d.certificate)
-            if ok {
-                sel = i
-                break
-            }
-        }
-    } else {
-        // Try to find a compatible lock based on decryption method
-        for i := range locks {
-            lock := locks[i]
-            if (d.privateKey != nil || d.token != nil) && (lock.Type == c2.LockTypePublicKey) {
-                // If token is set, we'll extract the key from it later, so we can select this lock
-                sel = i
-                break
-            } else if d.password != "" && lock.Type == c2.LockTypePassword {
-                sel = i
-                break
-            } else if d.symmetricKey != nil && lock.Type == c2.LockTypeSymmetricKey {
-                sel = i
-                break
-            }
-        }
-    }
+	if _, err := rdr.ReadHeader(); err != nil {
+		return nil, err
+	}
 
-    // Prepare FMK options from provided key/token/password
-    var opts c2.FMKOptions
-    if d.token != nil {
-        // Extract private key from token for CDOC2
-        if pkcs12Token, ok := d.token.(*PKCS12Token); ok {
-            if pkcs12Token.keyEntry != nil && pkcs12Token.keyEntry.PrivateKey != nil {
-                // Extract RSA or ECC private key from token
-                if rsaKey, ok := pkcs12Token.keyEntry.PrivateKey.RSAPrivateKey(); ok {
-                    opts.RSAPrivateKey = rsaKey
-                } else if ecKey, ok := pkcs12Token.keyEntry.PrivateKey.ECPrivateKey(); ok {
-                    opts.ECDSAPrivateKey = ecKey
-                } else {
-                    return nil, internal.NewDecryptionError("token does not contain RSA or ECC private key", nil)
-                }
-            } else {
-                return nil, internal.NewDecryptionError("token does not contain a private key", nil)
-            }
-        } else if pkcs11Token, ok := d.token.(*PKCS11Token); ok {
-            // PKCS#11 token: use token methods for CDOC2 decryption
-            // Store token reference in FMKOptions - ExtractFMKFromLock will use it
-            opts.PKCS11Token = pkcs11Token
-        } else {
-            return nil, internal.NewDecryptionError("token type not yet supported for CDOC2", nil)
-        }
-    }
-    if d.privateKey != nil {
-        if rsaKey, ok := d.privateKey.RSAPrivateKey(); ok {
-            opts.RSAPrivateKey = rsaKey
-        } else if ecKey, ok := d.privateKey.ECPrivateKey(); ok {
-            opts.ECDSAPrivateKey = ecKey
-        }
-    }
-    if d.password != "" {
-        opts.Password = d.password
-    }
-    if d.symmetricKey != nil {
-        opts.SymmetricKey = d.symmetricKey
-    }
-    
-    // Configure key server action if a key server lock is selected and client/config are available
-    selectedLock := locks[sel]
-    if selectedLock.Type == c2.LockTypeServer {
-        if d.keyServerClient != nil && d.keyServerConfigs != nil {
-            if client, ok := d.keyServerClient.(*c2keyserver.Client); ok {
-                if configInterface, ok := d.keyServerConfigs[selectedLock.ServerID]; ok {
-                    if config, ok := configInterface.(c2keyserver.KeyServerConfig); ok {
-                        opts.KeyServerAction = &c2.KeyServerAction{
-                            KeyServerClient: client,
-                            KeyServerConfig: config,
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    // If no decryption method provided, try to find a compatible lock
-    if opts.RSAPrivateKey == nil && opts.ECDSAPrivateKey == nil && opts.Password == "" && opts.SymmetricKey == nil && opts.KeyServerAction == nil {
-        return nil, internal.NewDecryptionError("no decryption method provided (private key, password, symmetric key, or key server)", nil)
-    }
+	// Map recipients to Locks and select one
+	locks, err := rdr.GetLocks()
+	if err != nil {
+		return nil, err
+	}
+	if len(locks) == 0 {
+		return nil, internal.NewDecryptionError("no recipients in CDOC2 header", nil)
+	}
 
-    // Extract FMK
-    fmk, err := rdr.ExtractFMK(sel, opts)
-    if err != nil {
-        return nil, err
-    }
-    defer func() { for i := range fmk { fmk[i] = 0 } }()
+	sel := 0
+	if d.certificate != nil {
+		// Try to find a lock that matches the certificate
+		for i := range locks {
+			ok, _ := locks[i].MatchesCertificate(d.certificate)
+			if ok {
+				sel = i
+				break
+			}
+		}
+	} else {
+		// Try to find a compatible lock based on decryption method.
+		// Note: the header order is not guaranteed to match preference (e.g. key-server vs regular cert locks),
+		// so we do this in passes.
+		if d.privateKey != nil || d.token != nil {
+			// Pass 1: prefer key-server locks if key-server is configured.
+			if d.keyServerClient != nil && d.keyServerConfigs != nil {
+				for i := range locks {
+					lock := locks[i]
+					if lock.Type == c2.LockTypeServer {
+						if _, ok := d.keyServerConfigs[lock.ServerID]; ok {
+							sel = i
+							goto selected
+						}
+					}
+				}
+			}
 
-    // Begin decryption
-    if err := rdr.BeginDecryption(fmk); err != nil {
-        return nil, err
-    }
-    defer rdr.FinishDecryption()
+			// Pass 2: fall back to plain public-key locks.
+			for i := range locks {
+				if locks[i].Type == c2.LockTypePublicKey {
+					sel = i
+					goto selected
+				}
+			}
+		} else if d.password != "" {
+			for i := range locks {
+				if locks[i].Type == c2.LockTypePassword {
+					sel = i
+					goto selected
+				}
+			}
+		} else if d.symmetricKey != nil {
+			for i := range locks {
+				if locks[i].Type == c2.LockTypeSymmetricKey {
+					sel = i
+					goto selected
+				}
+			}
+		}
 
-    // Iterate tar entries and collect files
-    var files []DecryptedFile
-    for {
-        name, size, err := rdr.NextFile()
-        if err == io.EOF {
-            break
-        }
-        if err != nil {
-            return nil, err
-        }
-        buf := make([]byte, size)
-        if _, err := io.ReadFull(rdr, buf); err != nil {
-            return nil, internal.NewDecryptionError("failed to read tar entry", err)
-        }
-        files = append(files, DecryptedFile{Name: name, Content: buf})
-    }
+	selected:
+	}
 
-    return files, nil
+	// Prepare FMK options from provided key/token/password
+	var opts c2.FMKOptions
+	if d.token != nil {
+		// Extract private key from token for CDOC2
+		if pkcs12Token, ok := d.token.(*PKCS12Token); ok {
+			if pkcs12Token.keyEntry != nil && pkcs12Token.keyEntry.PrivateKey != nil {
+				// Extract RSA or ECC private key from token
+				if rsaKey, ok := pkcs12Token.keyEntry.PrivateKey.RSAPrivateKey(); ok {
+					opts.RSAPrivateKey = rsaKey
+				} else if ecKey, ok := pkcs12Token.keyEntry.PrivateKey.ECPrivateKey(); ok {
+					opts.ECDSAPrivateKey = ecKey
+				} else {
+					return nil, internal.NewDecryptionError("token does not contain RSA or ECC private key", nil)
+				}
+			} else {
+				return nil, internal.NewDecryptionError("token does not contain a private key", nil)
+			}
+		} else if pkcs11Token, ok := d.token.(*PKCS11Token); ok {
+			// PKCS#11 token: use token methods for CDOC2 decryption
+			// Store token reference in FMKOptions - ExtractFMKFromLock will use it
+			opts.PKCS11Token = pkcs11Token
+		} else {
+			return nil, internal.NewDecryptionError("token type not yet supported for CDOC2", nil)
+		}
+	}
+	if d.privateKey != nil {
+		if rsaKey, ok := d.privateKey.RSAPrivateKey(); ok {
+			opts.RSAPrivateKey = rsaKey
+		} else if ecKey, ok := d.privateKey.ECPrivateKey(); ok {
+			opts.ECDSAPrivateKey = ecKey
+		}
+	}
+	if d.password != "" {
+		opts.Password = d.password
+	}
+	if d.symmetricKey != nil {
+		opts.SymmetricKey = d.symmetricKey
+	}
+
+	// Configure key server action if a key server lock is selected and client/config are available
+	selectedLock := locks[sel]
+	if selectedLock.Type == c2.LockTypeServer {
+		if d.keyServerClient != nil && d.keyServerConfigs != nil {
+			if client, ok := d.keyServerClient.(*c2keyserver.Client); ok {
+				if configInterface, ok := d.keyServerConfigs[selectedLock.ServerID]; ok {
+					if config, ok := configInterface.(c2keyserver.KeyServerConfig); ok {
+						opts.KeyServerAction = &c2.KeyServerAction{
+							KeyServerClient: client,
+							KeyServerConfig: config,
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// If no decryption method provided, try to find a compatible lock
+	if opts.RSAPrivateKey == nil && opts.ECDSAPrivateKey == nil && opts.Password == "" && opts.SymmetricKey == nil && opts.KeyServerAction == nil {
+		return nil, internal.NewDecryptionError("no decryption method provided (private key, password, symmetric key, or key server)", nil)
+	}
+
+	// Extract FMK
+	fmk, err := rdr.ExtractFMK(sel, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		for i := range fmk {
+			fmk[i] = 0
+		}
+	}()
+
+	// Begin decryption
+	if err := rdr.BeginDecryption(fmk); err != nil {
+		return nil, err
+	}
+	defer rdr.FinishDecryption()
+
+	// Iterate tar entries and collect files
+	var files []DecryptedFile
+	for {
+		name, size, err := rdr.NextFile()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		buf := make([]byte, size)
+		if _, err := io.ReadFull(rdr, buf); err != nil {
+			return nil, internal.NewDecryptionError("failed to read tar entry", err)
+		}
+		files = append(files, DecryptedFile{Name: name, Content: buf})
+	}
+
+	return files, nil
 }
 
 // DecryptToDirectory decrypts the CDOC and writes files to a directory
@@ -555,11 +592,13 @@ func (d *Decrypter) decryptECTransportKey(recipient *xmlenc.ECRecipient) ([]byte
 	}
 
 	// Derive wrap key via ConcatKDF
-	wrapKey, err := crypto.ConcatKDF(
+	wrapKey, err := crypto.ConcatKDFWithDigest(
 		sharedSecret,
 		recipient.GetAlgorithmID(),
 		recipient.GetPartyUInfo(),
 		recipient.GetPartyVInfo(),
+		recipient.GetDigestAlgorithm(),
+		32, // AES-KW-256 KEK length
 	)
 	if err != nil {
 		return nil, internal.NewDecryptionError("failed ConcatKDF", err)
