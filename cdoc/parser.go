@@ -5,12 +5,14 @@ import (
 	"encoding/xml"
 	"io"
 	"math/big"
+	"strconv"
 	"strings"
 
 	"crypto/ecdsa"
 	"crypto/elliptic"
 
 	"github.com/aarepuusepp/libcdoc-go/v2/cert"
+	cdoccrypto "github.com/aarepuusepp/libcdoc-go/v2/crypto"
 	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 	"github.com/aarepuusepp/libcdoc-go/v2/xmlenc"
 )
@@ -18,6 +20,15 @@ import (
 // Parser implements XML parsing for CDOC documents
 type Parser struct {
 	encryptedData *xmlenc.EncryptedData
+}
+
+// OriginalFile is metadata about a single original file embedded in a CDOC 1.1 container.
+// It is extracted from `EncryptionProperty Name="orig_file"` entries without decrypting.
+type OriginalFile struct {
+	Name     string
+	Size     int64
+	MimeType string
+	DataRef  string // e.g. D0
 }
 
 // NewParser creates a new Parser instance
@@ -170,7 +181,12 @@ func (p *Parser) parseECRecipient(encryptedKey *xmlenc.EncryptedKey) (*xmlenc.EC
 	}
 
 	ecKeyValue := agreementMethod.OriginatorKeyInfo.KeyValue.ECKeyValue
-	ephemeralPubKey, err := p.parseECPublicKey(ecKeyValue.PublicKey)
+	var namedCurveURI string
+	if ecKeyValue.NamedCurve != nil {
+		namedCurveURI = ecKeyValue.NamedCurve.URI
+	}
+
+	ephemeralPubKey, err := p.parseECPublicKey(ecKeyValue.PublicKey, namedCurveURI)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +210,7 @@ func (p *Parser) parseECRecipient(encryptedKey *xmlenc.EncryptedKey) (*xmlenc.EC
 
 	// Decode encrypted/wrapped key
 	encryptedKeyBase64 := encryptedKey.CipherData.CipherValue
-	encryptedKeyBytes := []byte(encryptedKeyBase64) // Store as base64 string for now
+	encryptedKeyBytes := []byte(encryptedKeyBase64)
 
 	return &xmlenc.ECRecipient{
 		Certificate:        recipientCert,
@@ -209,54 +225,63 @@ func (p *Parser) parseECRecipient(encryptedKey *xmlenc.EncryptedKey) (*xmlenc.EC
 }
 
 // parseECPublicKey parses an EC public key from base64-encoded point
-func (p *Parser) parseECPublicKey(base64PublicKey string) (*ecdsa.PublicKey, error) {
+func (p *Parser) parseECPublicKey(base64PublicKey string, namedCurveURI string) (*ecdsa.PublicKey, error) {
 	// Decode base64 public key
 	publicKeyBytes, err := base64.StdEncoding.DecodeString(base64PublicKey)
 	if err != nil {
 		return nil, internal.NewParseError("failed to decode EC public key", err)
 	}
 
-	// secp384r1 curve
-	curve := elliptic.P384()
+	var (
+		curve    elliptic.Curve
+		coordLen int
+	)
 
-	// Validate point length (for secp384r1, uncompressed point is 97 bytes: 1 byte prefix + 48 bytes X + 48 bytes Y)
-	if len(publicKeyBytes) != 97 && len(publicKeyBytes) != 96 {
-		// Try without prefix
-		if len(publicKeyBytes) == 96 {
-			// Uncompressed format: 96 bytes (X + Y, no prefix)
-			// Split into X and Y coordinates
-			xBytes := publicKeyBytes[:48]
-			yBytes := publicKeyBytes[48:]
-
-			x := new(big.Int).SetBytes(xBytes)
-			y := new(big.Int).SetBytes(yBytes)
-
-			// Validate point is on curve
-			if !curve.IsOnCurve(x, y) {
-				return nil, internal.NewParseError("EC point is not on curve", nil)
-			}
-
-			return &ecdsa.PublicKey{
-				Curve: curve,
-				X:     x,
-				Y:     y,
-			}, nil
+	if namedCurveURI != "" {
+		oid := strings.TrimPrefix(namedCurveURI, "urn:oid:")
+		switch oid {
+		case cdoccrypto.SecP256R1OID:
+			curve = elliptic.P256()
+			coordLen = 32
+		case cdoccrypto.SecP384R1OID:
+			curve = elliptic.P384()
+			coordLen = 48
+		default:
+			return nil, internal.NewParseError("unsupported EC named curve", nil)
 		}
-		return nil, internal.NewParseError("invalid EC public key length", nil)
+	} else {
+		// Backwards-compat fallback: infer curve from point length.
+		switch len(publicKeyBytes) {
+		case 65, 64:
+			curve = elliptic.P256()
+			coordLen = 32
+		case 97, 96:
+			curve = elliptic.P384()
+			coordLen = 48
+		default:
+			return nil, internal.NewParseError("invalid EC public key length", nil)
+		}
 	}
 
-	// Handle 97-byte format (with 0x04 prefix for uncompressed)
+	// Accept both uncompressed point encodings:
+	// - 0x04 || X || Y (1 + 2*coordLen bytes)
+	// - X || Y (2*coordLen bytes)
 	var offset int
-	if len(publicKeyBytes) == 97 {
+	switch len(publicKeyBytes) {
+	case 1 + 2*coordLen:
 		if publicKeyBytes[0] != 0x04 {
 			return nil, internal.NewParseError("invalid EC public key format", nil)
 		}
 		offset = 1
+	case 2 * coordLen:
+		offset = 0
+	default:
+		return nil, internal.NewParseError("invalid EC public key length", nil)
 	}
 
 	// Split into X and Y coordinates
-	xBytes := publicKeyBytes[offset : offset+48]
-	yBytes := publicKeyBytes[offset+48 : offset+96]
+	xBytes := publicKeyBytes[offset : offset+coordLen]
+	yBytes := publicKeyBytes[offset+coordLen : offset+2*coordLen]
 
 	x := new(big.Int).SetBytes(xBytes)
 	y := new(big.Int).SetBytes(yBytes)
@@ -302,6 +327,84 @@ func (p *Parser) GetEncryptionProperties() map[string]string {
 	}
 
 	return props
+}
+
+// GetOriginalFiles extracts `orig_file` metadata entries.
+//
+// The CDOC 1.1 writer stores multiple `orig_file` properties (one per embedded file) using
+// the format: `filename|size|mime_type|D#`. Filenames may contain `|`, so parsing is done
+// from the end.
+func (p *Parser) GetOriginalFiles() ([]OriginalFile, error) {
+	if p.encryptedData == nil {
+		return nil, internal.NewParseError("document not parsed", nil)
+	}
+	if p.encryptedData.EncryptionProperties == nil {
+		return []OriginalFile{}, nil
+	}
+
+	var (
+		files    []OriginalFile
+		firstErr error
+	)
+
+	for _, prop := range p.encryptedData.EncryptionProperties.Properties {
+		if prop.Name != "orig_file" {
+			continue
+		}
+
+		originalFile, err := parseOrigFileProperty(prop.Content)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = internal.NewParseError("failed to parse orig_file metadata", err)
+			}
+			continue
+		}
+		files = append(files, originalFile)
+	}
+
+	return files, firstErr
+}
+
+func parseOrigFileProperty(content string) (OriginalFile, error) {
+	// Format: filename|size|mime_type|D#
+	// Filenames can contain '|', so split from the end.
+	raw := strings.TrimSpace(content)
+
+	dataRefSep := strings.LastIndex(raw, "|")
+	if dataRefSep < 0 {
+		return OriginalFile{}, internal.NewParseError("invalid orig_file metadata (missing dataRef separator)", nil)
+	}
+	dataRef := strings.TrimSpace(raw[dataRefSep+1:])
+	rest := raw[:dataRefSep]
+
+	mimeSep := strings.LastIndex(rest, "|")
+	if mimeSep < 0 {
+		return OriginalFile{}, internal.NewParseError("invalid orig_file metadata (missing mimeType separator)", nil)
+	}
+	mimeType := strings.TrimSpace(rest[mimeSep+1:])
+	rest = rest[:mimeSep]
+
+	sizeSep := strings.LastIndex(rest, "|")
+	if sizeSep < 0 {
+		return OriginalFile{}, internal.NewParseError("invalid orig_file metadata (missing size separator)", nil)
+	}
+	sizeStr := strings.TrimSpace(rest[sizeSep+1:])
+	name := strings.TrimSpace(rest[:sizeSep])
+
+	size, err := strconv.ParseInt(sizeStr, 10, 64)
+	if err != nil {
+		return OriginalFile{}, internal.NewParseError("invalid orig_file metadata (size)", err)
+	}
+	if size < 0 {
+		return OriginalFile{}, internal.NewParseError("invalid orig_file metadata (negative size)", nil)
+	}
+
+	return OriginalFile{
+		Name:     name,
+		Size:     size,
+		MimeType: mimeType,
+		DataRef:  dataRef,
+	}, nil
 }
 
 // GetFilename returns the original filename from EncryptionProperties

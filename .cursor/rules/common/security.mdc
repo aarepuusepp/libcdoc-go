@@ -6,6 +6,7 @@ alwaysApply: true
 # Comprehensive Security Best Practices
 
 ## Context
+
 - Apply when writing or reviewing any code that handles data, authentication, authorization, or external interactions
 - These rules cover both general, language-agnostic principles and specific requirements for web applications/servers
 - Based on industry standards including OWASP ASVS and security best practices
@@ -13,6 +14,7 @@ alwaysApply: true
 ## Requirements
 
 ### Input Validation and Output Handling
+
 - **Input Validation:**
   - Sanitize and validate all external input (user input, API requests, file uploads, environment variables) to prevent injection attacks (SQLi, XSS, XXE, command injection)
   - Use allow-lists for validation rather than block-lists where possible
@@ -27,9 +29,10 @@ alwaysApply: true
   - Output encoding must be performed as a final step before interpreter use
 
 ### Authentication and Password Management
+
 - **Password Requirements:**
   - User-set passwords must be at least 8 characters (15+ recommended), up to 64 characters permitted
-  - Check passwords against top 3000 compromised passwords and breached password databases
+  - Check passwords against known-breached password lists using a k-anonymity API (e.g., HIBP) or equivalent service; do not rely on fixed-size “top-N” lists
   - Allow passwords of any composition; no forced complexity requirements
   - Password input fields must use type=password; allow paste functionality and password managers
   - Verify passwords exactly as received (no truncation or case transformation)
@@ -41,12 +44,15 @@ alwaysApply: true
   - No password hints or knowledge-based authentication ("secret questions")
   - Users must be able to change passwords with current password verification
 
-### OAuth 2.0 and Token Management
+### OAuth 2.1 / OpenID Connect and Token Management
+
 - **OAuth Flow Security:**
   - FORBID Implicit Grant and Resource Owner Password Credentials flows
   - ALWAYS use Authorization Code flow with PKCE (Proof Key for Code Exchange)
   - Authorization codes must be single-use and short-lived (max 10 minutes)
   - Validate redirect URIs against client-specific allowlist using exact string comparison
+- **Standards:**
+  - Follow OAuth 2.1 and OpenID Connect best practices for all authentication and authorization integrations
 - **Token Handling:**
   - Self-contained tokens must be validated using digital signature or MAC
   - Only allowlisted algorithms for token creation/verification; 'None' algorithm forbidden
@@ -55,6 +61,7 @@ alwaysApply: true
   - Store sensitive tokens server-side with HttpOnly, Secure session cookies, not browser storage
 
 ### Session Management
+
 - **Session Security:**
   - Session tokens must be dynamically generated with CSPRNG and at least 128 bits entropy
   - Generate new session token on authentication/re-authentication; terminate current session
@@ -66,7 +73,13 @@ alwaysApply: true
   - Provide option to terminate all other sessions after authentication factor changes
   - Admins must be able to terminate any user sessions
 
+### CSRF Protection
+
+- For cookie-based sessions, require CSRF protection on all state-changing requests (e.g., synchronizer token or double-submit cookie patterns)
+- Use SameSite cookies as defense-in-depth only; do not rely on SameSite alone for CSRF protection
+
 ### Authorization and Access Control
+
 - **Access Control:**
   - Apply principle of least privilege for all authorization decisions
   - Verify user authorization for every request accessing private data (prevent IDOR/BOLA)
@@ -78,6 +91,7 @@ alwaysApply: true
   - Prevent overbroad API responses that expose unauthorized data
 
 ### Secrets Management
+
 - **Storage and Handling:**
   - Use secure secrets management solution (Vault, AWS Secrets Manager, environment variables with proper access control)
   - NEVER hardcode credentials or sensitive keys in source code
@@ -85,11 +99,14 @@ alwaysApply: true
   - Use least privilege access to secrets management systems
 
 ### Web Application Security Headers
+
 - **Required Headers:**
-  - Implement strong `Content-Security-Policy` with object-src 'none', base-uri 'none'
+  - Implement strong `Content-Security-Policy` with object-src 'none', base-uri 'none'; disallow 'unsafe-inline' for scripts and use nonces or hashes for any required inline scripts
   - Use `Strict-Transport-Security` with min 1 year max-age and includeSubDomains
   - Include `X-Content-Type-Options: nosniff` on all responses
   - Use `Content-Security-Policy: frame-ancestors` to prevent clickjacking
+  - Set `Referrer-Policy: strict-origin-when-cross-origin`
+  - Set `Permissions-Policy` to explicitly disable unneeded powerful browser features
 - **Cookie Security:**
   - Cookies must have `Secure` attribute; use `__Host-` or `__Secure-` prefixes
   - Authorization cookies must have `HttpOnly` attribute
@@ -98,19 +115,22 @@ alwaysApply: true
   - Access-Control-Allow-Origin must be fixed value or validated against allowlist
   - CORS-safelisted requests to sensitive functionality must verify origin
   - Use appropriate HTTP methods (POST, PUT, PATCH, DELETE) for sensitive operations
+  - Never use wildcard origins when credentials are involved; only allowlist exact origins
 
 ### Cryptography
+
 - **Cryptographic Standards:**
   - Use only approved ciphers and modes (e.g., AES-GCM); avoid insecure block modes (ECB)
   - Use approved hash functions; avoid MD5, SHA-1 for cryptographic purposes
   - Generate random numbers/strings with CSPRNG and at least 128 bits entropy
   - Store passwords using approved, computationally intensive key derivation functions
 - **TLS Configuration:**
-  - Use only TLS 1.2+ with strong cipher suites; disable weak/deprecated protocols
+  - Prefer TLS 1.3; support TLS 1.2 only with strong cipher suites; disable weak/deprecated protocols
   - External-facing services must use publicly trusted certificates
   - Validate certificates before TLS communication; use trusted certificates for internal services
 
 ### File Upload and Handling
+
 - **File Security:**
   - Accept only files of processable size to prevent DoS
   - Validate file extension matches expected type and content matches type (magic bytes)
@@ -120,6 +140,7 @@ alwaysApply: true
   - Sanitize user-submitted filenames; use trusted data for file paths
 
 ### Error Handling and Logging
+
 - **Error Management:**
   - Avoid revealing sensitive information in user-facing error messages
   - Return generic messages for unexpected/security-sensitive errors
@@ -131,16 +152,20 @@ alwaysApply: true
   - Include necessary metadata (when, where, who, what) for investigation
   - Protect logs from unauthorized access; transmit securely to separate system
   - Encode log data to prevent log injection attacks
+  - Do not log credentials, tokens, secrets, or sensitive PII; implement field-level redaction; include correlationId/traceId where available
 
 ### Data Protection
+
 - **Sensitive Data Handling:**
   - Send sensitive data only in HTTP body/headers, not URLs/query strings
   - Clear authenticated data from client storage after session termination
   - Classify sensitive data and implement appropriate protection controls
   - Use anti-caching headers for sensitive data responses
+  - Set `Cache-Control: no-store` (and `Pragma: no-cache` where applicable) on responses containing sensitive data
   - Remove sensitive information from file metadata unless user consents
 
 ### Dependency and Configuration Management
+
 - **Dependency Security:**
   - Regularly scan dependencies for vulnerabilities (OWASP Dependency-Check, npm audit)
   - Keep dependencies up-to-date with documented remediation timeframes
@@ -159,7 +184,7 @@ alwaysApply: true
   ```javascript
   // Using parameterized query to prevent SQL injection
   const results = await db.query(
-    'SELECT * FROM products WHERE category = ? AND price < ?', 
+    'SELECT * FROM products WHERE category = ? AND price < ?',
     [userCategory, maxPrice]
   );
   ```
@@ -226,6 +251,7 @@ alwaysApply: true
   if (!isValidFileSignature(fileBuffer, file.mimetype)) {
     throw new Error('File content does not match declared type');
   }
+
   ```
   *Explanation: Multiple validation layers prevent malicious file uploads.*
 </example>

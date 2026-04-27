@@ -1,6 +1,6 @@
 ---
-description: 
-globs: 
+description: jOOQ DSL and database access conventions for type-safe Java data access
+globs: **/*.java
 alwaysApply: true
 ---
 # jOOQ DSL and Database Access Conventions
@@ -9,10 +9,10 @@ alwaysApply: true
 - Apply when writing or modifying database access logic using jOOQ, typically within service or repository classes.
 - Focuses on consistent use of the jOOQ DSL and mapping.
 - **Retry Logic:** Retry mechanisms are framework-specific. Refer to:
-    - Spring Boot: `.cursor/rules/java-spring-boot/spring-retry-conventions.mdc`
-    - Micronaut: `.cursor/rules/java-micronaut/micronaut-retry-conventions.mdc`
+    - Spring Boot: `mdc:rules/java-spring-boot/spring-retry-conventions.mdc`
+    - Micronaut: `mdc:rules/java-micronaut/micronaut-retry-conventions.mdc`
 - **Transaction Management:** Managed by the specific framework (Spring/Micronaut). Refer to framework convention rules.
-- **Auditing:** For conventions on using the `AuditLogger`, see `.cursor/rules/java-common/audit-logging-conventions.mdc`.
+- **Auditing:** For conventions on using the `AuditLogger`, see `mdc:rules/java-common/audit-logging.mdc`.
 
 ## Requirements
 - **Database Interaction:** Use jOOQ (`DSLContext`) injected via constructor for all database operations. Avoid Spring Data JPA repositories or raw JDBC.
@@ -25,7 +25,7 @@ alwaysApply: true
   # Good: jOOQ Type-Safe DSL Query in a Service Method
   ```java
   // Assuming BOOK is the generated jOOQ table class
-  import static ee.smit.jooq.Tables.BOOK;
+  import static {base.package}.jooq.Tables.BOOK; // Use your generated jOOQ Tables class
 
   // ... inside a service method (retry/transaction/audit handled by framework/other rules) ...
   public List<BookResponse> findCheapBooks() {
@@ -37,7 +37,7 @@ alwaysApply: true
           .map(this::mapToBookResponse) // Mapping function
           .toList();
 
-      // Auditing is handled separately (see rule audit-logging-conventions.mdc)
+      // Auditing is handled separately (see mdc:rules/java-common/audit-logging.mdc)
       // if (!cheapBooks.isEmpty()) { AuditLogger.logBatchOperation(...); }
 
       return cheapBooks;
@@ -61,7 +61,7 @@ alwaysApply: true
       .fetchStream()
       .map(record -> mapToBookResponse(record.into(BOOK))) // More complex mapping often needed
       .toList();
-  // Missing Auditing (refer to rule audit-logging-conventions.mdc)
+  // Missing Auditing (refer to mdc:rules/java-common/audit-logging.mdc)
   ```
 </example>
 
@@ -76,7 +76,7 @@ alwaysApply: true
           .fetchOptional()
           .map(this::mapToBookResponse); // Mapping logic
 
-      // Auditing is handled separately (see rule audit-logging-conventions.mdc)
+      // Auditing is handled separately (see mdc:rules/java-common/audit-logging.mdc)
       // if (book.isPresent()) { AuditLogger.logBookAccessed(...); }
 
       return book;
@@ -90,7 +90,7 @@ alwaysApply: true
   // Assuming BOOK is the generated jOOQ table class
   // Assuming BookResponse is the target DTO
   // Assuming BookRecord is the jOOQ generated record class
-  import static ee.smit.jooq.Tables.BOOK;
+  import static {base.package}.jooq.Tables.BOOK; // Use your generated jOOQ Tables class
   import org.jooq.Condition;
   import org.jooq.impl.DSL;
   import java.math.BigDecimal;
@@ -141,4 +141,13 @@ alwaysApply: true
 </example>
 
 ## Critical Rules
-  - ALWAYS use jOOQ via `
+  - ALWAYS use generated jOOQ DSL (tables/fields) with bind values; NEVER build raw SQL strings
+  - ALWAYS map `Record` objects to DTOs/entities via dedicated mapping methods
+  - NEVER manage JDBC connections manually; rely on framework-provided transaction management
+  - PREFER streaming (e.g., `fetchStream`) for large result sets; ensure resources are closed promptly
+  - PREFER composed joins over iterative queries to avoid N+1 patterns
+  - BE EXPLICIT with locking semantics (e.g., `forUpdate`) when necessary and document invariants
+  - VALIDATE and sanitize dynamic conditions; build predicates via type-safe `Condition` composition
+  - USE batch operations where appropriate to reduce round trips (e.g., batch inserts/updates)
+  - SEPARATE auditing concerns from DB logic; follow audit logging conventions (`mdc:rules/java-common/audit-logging.mdc`)
+  - RETURN `Optional` for absent values instead of `null`; avoid null returns

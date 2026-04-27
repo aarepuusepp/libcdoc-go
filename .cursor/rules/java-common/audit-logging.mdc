@@ -1,17 +1,19 @@
 ---
-description: 
-globs: 
+description: Java audit logging conventions using a dedicated AuditLogger utility
+globs: **/*.java
 alwaysApply: true
 ---
 # Audit Logging Conventions
 
 ## Context
+
 - Apply when implementing significant business operations within service classes (`src/main/java/**/service/**/*.java`) that require an audit trail.
 - This application uses a dedicated `AuditLogger` utility to ensure consistent, structured logging of important events for security and compliance.
 - Audit logs are separate from regular application/debug logs.
 - For comprehensive security best practices, see `[security.mdc](mdc:rules/common/security.mdc)`.
 
 ## Standard Log Structure
+
 Using the `AuditLogger` utility ensures logs are generated in the following standard JSON format. Developers do **not** construct this JSON manually.
 
 ```json
@@ -48,13 +50,17 @@ Using the `AuditLogger` utility ensures logs are generated in the following stan
 ```
 
 ## Requirements
+
 - **Use `AuditLogger`:** ALL audit log entries MUST be generated using the static methods provided by the `AuditLogger` utility class.
 - **Log Significant Business Events:** Only log high-level, meaningful business operations (e.g., resource creation, update, deletion, key access), not low-level implementation details.
 - **Log After Success:** Audit log entries for successful operations MUST be created *after* the core business logic (e.g., database commit) has completed successfully within the same transaction context.
 - **Do Not Log Sensitive Data:** Avoid including sensitive personal information (e.g., passwords, detailed financial data, PII unless strictly necessary and compliant with regulations) in audit log messages or `extraInfo` fields. Redact or omit if necessary.
 - **Use Correct Methods:** Use the appropriate `AuditLogger` method for the event type.
+- **Log All Authentication Attempts:** ALL authentication attempts MUST be logged regardless of outcome (login, logout, failed authentication, session timeout).
+- **Log All User-Initiated Activities:** ALL user-initiated activities MUST be logged (CRUD operations, searches, file uploads, exports).
 
 ## Key `AuditLogger` Methods (Examples)
+
 The `AuditLogger` provides specific methods for common events, such as:
 
 ```java
@@ -71,9 +77,11 @@ AuditLogger.logBatchOperation(batchType, count, description);
 // AuditLogger.logLoginSuccess(userId);
 // AuditLogger.logPermissionChange(userId, permission, granted);
 ```
+
 *(Consult the `AuditLogger` class for the definitive list and parameters.)*
 
 ## Examples
+
 <example>
  # Good: Logging book creation after successful DB store
  ```java
@@ -95,6 +103,7 @@ AuditLogger.logBatchOperation(batchType, count, description);
          return mapToBookResponse(bookRecord);
      }
  }
+
  ```
 </example>
 
@@ -124,6 +133,7 @@ AuditLogger.logBatchOperation(batchType, count, description);
      }
  }
  ```
+
 </example>
 
 <example type="invalid">
@@ -142,6 +152,7 @@ AuditLogger.logBatchOperation(batchType, count, description);
 </example>
 
 ## Critical Rules
+
 - ALWAYS use the `AuditLogger` utility for creating audit log entries.
 - NEVER create audit logs manually or use standard application loggers (`slf4j`, `log4j2`, etc.) for audit purposes.
 - ALWAYS log *after* the core operation has successfully completed.

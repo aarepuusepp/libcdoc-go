@@ -1,10 +1,10 @@
 ---
-description: 
-globs: 
+description: Spring Boot testing standards for unit and integration tests with Testcontainers
+globs: **/*Test.java,**/test/**/*.java
 alwaysApply: true
 ---
+
 # Spring Boot Testing Standards
-globs: **/*Test.java, **/test/**/*.java
 
 ## Context
 
@@ -14,23 +14,26 @@ globs: **/*Test.java, **/test/**/*.java
 - For both unit tests and integration tests with TestContainers
 - When using jOOQ for database access and complex mocking scenarios
 - Follow integration-first testing approach: comprehensive API tests, then focused unit tests
+- **Note:** Some examples show Spring Boot 4-specific patterns (marked with "Spring Boot 4+"). For Spring Boot 3.5, use `PostgreSQLContainer<?>` (with generic) and `TestRestTemplate` from `org.springframework.boot.test.web.client.TestRestTemplate` without `@AutoConfigureTestRestTemplate`
 
 ## Requirements
 
 1. **Test Strategy:** Prefer integration tests against the API first, then unit tests with mocks for specific logic testing
 2. **Test Structure:** Use appropriate Spring Boot test slices (`@WebMvcTest`, `@DataJpaTest`, `@JsonTest`, etc.)
 3. **Integration Tests:** Use `@SpringBootTest` with TestContainers for full integration testing
-4. **Mocking:** Use `@MockBean` for Spring beans, `@Mock` for regular dependencies
+4. **Mocking:** Use `@Mock` + `@InjectMocks` for unit tests. Use `@MockitoBean` in Spring test slices when bean replacement is necessary
 5. **Test Profiles:** Use `@ActiveProfiles("test")` for test-specific configuration
 6. **Database Testing:** Use TestContainers with PostgreSQL for realistic database testing
 7. **Web Layer Testing:** Use MockMvc for controller testing with proper content type assertions
 8. **Base Test Classes:** Use inheritance for shared test infrastructure and common setup
 9. **TestContainers Configuration:** Use singleton pattern with `@ServiceConnection` for container reuse
+10. **External HTTP APIs:** Use WireMock for mocking external HTTP dependencies in tests 
 
 ## Examples
 
 <example>
-# Good: TestContainers Singleton Configuration
+# Good: TestContainers Singleton Configuration (Spring Boot 4+ / Testcontainers 2.x)
+# Note: For Spring Boot 3.5, use `PostgreSQLContainer<?>` (with generic type parameter)
 ```java
 @TestConfiguration
 @SuppressWarnings("resource") // Suppress false positive leak warning for singleton container
@@ -39,21 +42,23 @@ public class TestcontainersConfiguration {
     private static final Logger log = LoggerFactory.getLogger(TestcontainersConfiguration.class);
     private static final DockerImageName POSTGRES_IMAGE = DockerImageName.parse("postgres:15")
             .asCompatibleSubstituteFor("postgres");
-    
-    private static final PostgreSQLContainer<?> POSTGRES_CONTAINER;
+
+    // Spring Boot 4+ / Testcontainers 2.x: No generic type parameter
+    // Spring Boot 3.5: Use PostgreSQLContainer<?>
+    private static final PostgreSQLContainer POSTGRES_CONTAINER;
 
     static {
         log.info("Initializing PostgreSQL Testcontainer with reuse enabled...");
-        POSTGRES_CONTAINER = new PostgreSQLContainer<>(POSTGRES_IMAGE)
+        POSTGRES_CONTAINER = new PostgreSQLContainer(POSTGRES_IMAGE)
                 .withDatabaseName("bookstore_test")
                 .withUsername("test")
                 .withPassword("test")
                 .withReuse(true)
                 .withStartupTimeout(Duration.ofSeconds(60))
                 .withConnectTimeoutSeconds(60);
-        
+
         POSTGRES_CONTAINER.start();
-        
+
         // Add shutdown hook for robustness
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             if (POSTGRES_CONTAINER != null && POSTGRES_CONTAINER.isRunning()) {
@@ -64,7 +69,9 @@ public class TestcontainersConfiguration {
 
     @Bean
     @ServiceConnection
-    public PostgreSQLContainer<?> postgresContainer() {
+    // Spring Boot 4+ / Testcontainers 2.x: No generic type parameter
+    // Spring Boot 3.5: Use PostgreSQLContainer<?>
+    public PostgreSQLContainer postgresContainer() {
         return POSTGRES_CONTAINER;
     }
 
@@ -76,7 +83,9 @@ public class TestcontainersConfiguration {
         registry.add("spring.datasource.driver-class-name", POSTGRES_CONTAINER::getDriverClassName);
     }
 
-    public static PostgreSQLContainer<?> getPostgresContainer() {
+    // Spring Boot 4+ / Testcontainers 2.x: No generic type parameter
+    // Spring Boot 3.5: Use PostgreSQLContainer<?>
+    public static PostgreSQLContainer getPostgresContainer() {
         return POSTGRES_CONTAINER;
     }
 }
@@ -84,40 +93,42 @@ public class TestcontainersConfiguration {
 </example>
 
 <example>
-# Good: Base Integration Test Class
+# Good: Base Integration Test Class (Spring Boot 4+)
+# Note: For Spring Boot 3.5, use:
+#   - `@Import(TestcontainersConfiguration.class)` (without TestRestTemplateAutoConfiguration)
+#   - `TestRestTemplate` from `org.springframework.boot.test.web.client.TestRestTemplate`
+#   - `PostgreSQLContainer<?>` (with generic)
 ```java
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import(TestcontainersConfiguration.class)
+@AutoConfigureTestRestTemplate  // Spring Boot 4+ only
+@Import({TestcontainersConfiguration.class, TestRestTemplateAutoConfiguration.class})  // Spring Boot 4+ only
 @ActiveProfiles("test")
 public abstract class BaseIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(BaseIntegrationTest.class);
-    
-    protected static final PostgreSQLContainer<?> POSTGRES = TestcontainersConfiguration.getPostgresContainer();
-    
-    @Autowired
-    @SuppressWarnings("unused") // Field injection required for TestcontainersConfiguration bean loading
-    private TestcontainersConfiguration testcontainersConfig;
-    
+
+    // Spring Boot 4+ / Testcontainers 2.x: No generic type parameter
+    protected static final PostgreSQLContainer POSTGRES = TestcontainersConfiguration.getPostgresContainer();
+
     @LocalServerPort
     protected int port;
-    
+
     @Autowired
     protected TestRestTemplate restTemplate;
-    
+
     protected HttpHeaders headers;
-    
+
     @BeforeEach
     void setUpBase() {
         // Verify container is running
         if (!POSTGRES.isRunning()) {
             throw new IllegalStateException("PostgreSQL container is not running!");
         }
-        
+
         headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
-        
+
         log.info("PostgreSQL connection URL: {}", POSTGRES.getJdbcUrl());
     }
 
@@ -132,29 +143,29 @@ public abstract class BaseIntegrationTest {
 # Good: Integration Test Against API
 ```java
 class BookControllerIntegrationTest extends BaseIntegrationTest {
-    
+
     private static final Logger log = LoggerFactory.getLogger(BookControllerIntegrationTest.class);
-    
+
     @Autowired
     private DSLContext dsl;
 
     private String booksUrl;
-    
+
     @BeforeEach
     void setUp() {
         booksUrl = createBaseUrl("books");
         log.info("Using API base URL: {}", booksUrl);
     }
-    
+
     @Test
     void shouldCreateBook() {
         // Given
         Book book = BookTestFixture.createTestBook("Test Book", "Test Author");
         HttpEntity<Book> request = new HttpEntity<>(book, headers);
-        
+
         // When
         ResponseEntity<BookResponse> response = restTemplate.postForEntity(booksUrl, request, BookResponse.class);
-        
+
         // Then
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         BookResponse created = response.getBody();
@@ -202,12 +213,12 @@ class BookServiceTest {
     void findBookByIdNotFound() {
         // Given
         UUID testId = UUID.randomUUID();
-        
+
         @SuppressWarnings("unchecked")
         SelectWhereStep<BookRecord> selectWhereStep = mock(SelectWhereStep.class);
         @SuppressWarnings("unchecked")
         SelectConditionStep<BookRecord> selectConditionStep = mock(SelectConditionStep.class);
-        
+
         when(dsl.selectFrom(BOOK)).thenReturn(selectWhereStep);
         when(selectWhereStep.where(BOOK.ID.eq(testId))).thenReturn(selectConditionStep);
         when(selectConditionStep.fetchOptional()).thenReturn(Optional.empty());
@@ -233,7 +244,7 @@ class BookControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean
+    @MockitoBean
     private BookService bookService;
 
     @Test
@@ -275,7 +286,7 @@ class MyControllerSecurityTest {
         public SecurityContext createSecurityContext(WithMockJwt annotation) {
             SecurityContext context = SecurityContextHolder.createEmptyContext();
             Map<String, Object> claims = Map.of("sub", annotation.subject());
-            Jwt jwt = new Jwt("token", Instant.now(), Instant.now().plusSeconds(3600), 
+            Jwt jwt = new Jwt("token", Instant.now(), Instant.now().plusSeconds(3600),
                              Map.of("alg", "none"), claims);
             context.setAuthentication(new JwtAuthenticationToken(jwt, Collections.emptyList()));
             return context;
@@ -298,9 +309,14 @@ class MyControllerSecurityTest {
 - **ALWAYS** use appropriate test slices (`@WebMvcTest`, `@DataJpaTest`) for focused testing
 - **ALWAYS** use TestContainers for integration tests requiring databases
 - **ALWAYS** use `@ActiveProfiles("test")` for test configuration
+- **ALWAYS** use `@Mock` + `@InjectMocks` for unit tests
 - **ALWAYS** extend base test classes for integration tests to reuse common infrastructure
 - **PREFER** singleton TestContainers pattern with `@ServiceConnection` for better performance
 - **USE** `@Import(TestcontainersConfiguration.class)` for consistent container setup
+- **USE** `@MockitoBean` in Spring test slices when a bean replacement is required
+- **USE** `PostgreSQLContainer` (no generic type) for Testcontainers 2.x / Spring Boot 4+ compatibility. For Spring Boot 3.5, use `PostgreSQLContainer<?>` (with generic)
+- **USE** `TestRestTemplate` from `org.springframework.boot.resttestclient.TestRestTemplate` with `@AutoConfigureTestRestTemplate` and `TestRestTemplateAutoConfiguration` for Spring Boot 4+ integration tests. For Spring Boot 3.5, use `TestRestTemplate` from `org.springframework.boot.test.web.client.TestRestTemplate` without auto-configuration annotations
+- **USE** WireMock to mock external HTTP APIs in tests
 - **MOCK** jOOQ DSL chains properly with type-safe mocking patterns
 - **CREATE** custom security contexts for JWT testing when needed
 - **IMPLEMENT** base test classes for shared test infrastructure

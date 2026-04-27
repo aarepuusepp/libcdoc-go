@@ -1,5 +1,5 @@
 ---
-description: 
+description: Micronaut database retry conventions using @Retryable for jOOQ-based services
 globs: **/*.java
 alwaysApply: false
 ---
@@ -9,9 +9,9 @@ alwaysApply: false
 - Apply when implementing database access within service classes in a Micronaut project that requires retry capabilities.
 - Relies on `micronaut-retry` module and the `@Retryable` annotation.
 - Assumes PostgreSQL database and the need to retry specific failover/read-only errors.
-- For core jOOQ DSL usage, see `.cursor/rules/java/database/jooq-database-access.mdc`.
+- For core jOOQ DSL usage, see `mdc:rules/java-common/jooq-database-access.mdc`.
 - Transaction management is handled by Micronaut (`jakarta.transaction.Transactional` or Micronaut Data specific annotations).
-- For auditing conventions, see `.cursor/rules/java-common/audit-logging-conventions.mdc`.
+- For auditing conventions, see `mdc:rules/java-common/audit-logging.mdc`.
 
 ## Requirements
 - **Annotation:** Database operations (reads/writes) requiring retry MUST be annotated with `@io.micronaut.retry.annotation.Retryable`. Annotate the public service method containing the database logic.
@@ -64,7 +64,7 @@ alwaysApply: false
               .fetchOptional()
               .map(this::mapToBookResponse);
 
-          // Auditing logic (see rule audit-logging-conventions.mdc)
+          // Auditing logic (see mdc:rules/java-common/audit-logging.mdc)
           if (book.isPresent()) {
               AuditLogger.logBookAccessed(id, book.get().getTitle(), "BY_ID");
           }

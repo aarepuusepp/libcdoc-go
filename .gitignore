@@ -33,3 +33,4 @@ Thumbs.db
 test_output/
 
 /*.zip
+.cursor/

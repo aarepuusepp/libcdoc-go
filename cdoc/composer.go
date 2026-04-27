@@ -334,6 +334,11 @@ func (c *Composer) createECEncryptedKey(recipientCert *x509.Certificate, cn stri
 		return nil, err
 	}
 
+	namedCurveOID, digestURI, err := crypto.ECNamedCurveOIDAndDigestURI(ecPubKey.Curve)
+	if err != nil {
+		return nil, err
+	}
+
 	// Generate ephemeral key pair
 	ephemeralPrivKey, err := crypto.GenerateECKeyPair(ecPubKey)
 	if err != nil {
@@ -359,7 +364,7 @@ func (c *Composer) createECEncryptedKey(recipientCert *x509.Certificate, cn stri
 	partyVInfo := recipientCert.Raw
 
 	// Derive wrap key via ConcatKDF
-	wrapKey, err := crypto.ConcatKDF(sharedSecret, algorithmID, partyUInfo, partyVInfo)
+	wrapKey, err := crypto.ConcatKDFWithDigest(sharedSecret, algorithmID, partyUInfo, partyVInfo, digestURI, 32)
 	if err != nil {
 		return nil, err
 	}
@@ -383,7 +388,7 @@ func (c *Composer) createECEncryptedKey(recipientCert *x509.Certificate, cn stri
 				PartyUInfo:  "00" + internal.EncodeHex(partyUInfo),
 				PartyVInfo:  "00" + internal.EncodeHex(partyVInfo),
 				DigestMethod: xmlenc.DigestMethod{
-					Algorithm: "http://www.w3.org/2001/04/xmlenc#sha384",
+					Algorithm: digestURI,
 				},
 			},
 		},
@@ -391,7 +396,7 @@ func (c *Composer) createECEncryptedKey(recipientCert *x509.Certificate, cn stri
 			KeyValue: &xmlenc.KeyValue{
 				ECKeyValue: &xmlenc.ECKeyValue{
 					NamedCurve: &xmlenc.NamedCurve{
-						URI: "urn:oid:1.3.132.0.34", // secp384r1
+						URI: "urn:oid:" + namedCurveOID,
 					},
 					PublicKey: ephemeralPubKeyBase64,
 				},

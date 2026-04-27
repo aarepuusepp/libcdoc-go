@@ -15,25 +15,60 @@ import (
 )
 
 const (
+	// SecP256R1OID is the OID for secp256r1 (aka prime256v1) curve
+	SecP256R1OID = "1.2.840.10045.3.1.7"
 	// SecP384R1OID is the OID for secp384r1 curve
-	SecP384R1OID    = "1.3.132.0.34"
+	SecP384R1OID = "1.3.132.0.34"
 	DigestSHA256URI = "http://www.w3.org/2001/04/xmlenc#sha256"
 	DigestSHA384URI = "http://www.w3.org/2001/04/xmlenc#sha384"
 	DigestSHA512URI = "http://www.w3.org/2001/04/xmlenc#sha512"
 )
 
 var (
+	// P256 is the secp256r1 curve
+	P256 = elliptic.P256()
 	// P384 is the secp384r1 curve
 	P384 = elliptic.P384()
 )
 
-// GenerateECKeyPair generates an ephemeral EC key pair on the same curve as the given public key
-func GenerateECKeyPair(publicKey *ecdsa.PublicKey) (*ecdsa.PrivateKey, error) {
-	if publicKey.Curve != P384 {
-		return nil, internal.NewEncryptionError(
-			fmt.Sprintf("unsupported curve, only secp384r1 is supported, got %T", publicKey.Curve),
+type ecCurveInfo struct {
+	namedCurveOID string
+	digestURI     string
+}
+
+func curveInfo(curve elliptic.Curve) (ecCurveInfo, error) {
+	switch curve {
+	case P256:
+		return ecCurveInfo{
+			namedCurveOID: SecP256R1OID,
+			digestURI:     DigestSHA256URI,
+		}, nil
+	case P384:
+		return ecCurveInfo{
+			namedCurveOID: SecP384R1OID,
+			digestURI:     DigestSHA384URI,
+		}, nil
+	default:
+		return ecCurveInfo{}, internal.NewEncryptionError(
+			fmt.Sprintf("unsupported curve, only secp256r1 and secp384r1 are supported, got %T", curve),
 			nil,
 		)
+	}
+}
+
+// ECNamedCurveOIDAndDigestURI returns the XMLENC11 NamedCurve OID and ConcatKDF digest URI for the given curve.
+func ECNamedCurveOIDAndDigestURI(curve elliptic.Curve) (namedCurveOID string, digestURI string, err error) {
+	info, err := curveInfo(curve)
+	if err != nil {
+		return "", "", err
+	}
+	return info.namedCurveOID, info.digestURI, nil
+}
+
+// GenerateECKeyPair generates an ephemeral EC key pair on the same curve as the given public key
+func GenerateECKeyPair(publicKey *ecdsa.PublicKey) (*ecdsa.PrivateKey, error) {
+	if _, err := curveInfo(publicKey.Curve); err != nil {
+		return nil, err
 	}
 
 	privKey, err := ecdsa.GenerateKey(publicKey.Curve, rand.Reader)
@@ -162,10 +197,9 @@ func ExtractECPublicKeyFromCertificate(cert *x509.Certificate) (*ecdsa.PublicKey
 		)
 	}
 
-	// Validate curve is secp384r1
-	if pubKey.Curve != P384 {
+	if _, err := curveInfo(pubKey.Curve); err != nil {
 		return nil, internal.NewCertificateError(
-			fmt.Sprintf("unsupported curve, only secp384r1 is supported"),
+			"unsupported curve, only secp256r1 and secp384r1 are supported",
 			nil,
 		)
 	}
