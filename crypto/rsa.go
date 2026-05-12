@@ -8,6 +8,8 @@ import (
 )
 
 // EncryptRSA encrypts data using RSA PKCS#1 v1.5 encryption
+//
+//nolint:staticcheck // CDOC 1.x compatibility requires RSA PKCS#1 v1.5 key transport.
 func EncryptRSA(data []byte, cert *x509.Certificate) ([]byte, error) {
 	pubKey, ok := cert.PublicKey.(*rsa.PublicKey)
 	if !ok {
@@ -27,6 +29,8 @@ func EncryptRSA(data []byte, cert *x509.Certificate) ([]byte, error) {
 }
 
 // DecryptRSA decrypts data using RSA PKCS#1 v1.5 decryption
+//
+//nolint:staticcheck // CDOC 1.x compatibility requires RSA PKCS#1 v1.5 key transport.
 func DecryptRSA(encrypted []byte, privKey *rsa.PrivateKey) ([]byte, error) {
 	decrypted, err := rsa.DecryptPKCS1v15(rand.Reader, privKey, encrypted)
 	if err != nil {

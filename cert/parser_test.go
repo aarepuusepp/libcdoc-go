@@ -1,9 +1,6 @@
 package cert
 
-import (
-	"os"
-	"testing"
-)
+import "testing"
 
 func TestParseCertificatePEM(t *testing.T) {
 	// This test will need actual certificate files from cdoc4j test resources
@@ -41,12 +38,3 @@ func TestParseCertificate_InvalidData(t *testing.T) {
 		})
 	}
 }
-
-// Helper function to check if certificate test file exists and load it
-func loadTestCert(path string) ([]byte, error) {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return nil, err
-	}
-	return os.ReadFile(path)
-}
-

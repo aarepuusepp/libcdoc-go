@@ -28,8 +28,6 @@ type Builder struct {
 	keyServerRecipients []KeyServerRecipient   // For CDOC 2.0 key server recipients
 	keyServerClient     interface{}            // *cdoc2/keyserver.Client - set via SetKeyServerClient
 	keyServerConfigs    map[string]interface{} // map[serverID]*cdoc2/keyserver.KeyServerConfig
-	output              io.Writer
-	outputFile          string
 }
 
 // KeyServerRecipient holds certificate and key server configuration for CDOC 2.0
@@ -70,7 +68,7 @@ func (b *Builder) WithDataFileFromPath(filepath string) error {
 	if err != nil {
 		return internal.NewValidationError("failed to open file: "+filepath, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	info, err := file.Stat()
 	if err != nil {
@@ -108,7 +106,7 @@ func (b *Builder) WithRecipientFromPath(filepath string) error {
 	if err != nil {
 		return internal.NewCertificateError("failed to open certificate file", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	return b.WithRecipient(file)
 }
@@ -279,7 +277,7 @@ func (b *Builder) BuildToFile(filepath string) error {
 	if err != nil {
 		return internal.NewEncryptionError("failed to create output file", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	return b.BuildToWriter(file)
 }

@@ -26,10 +26,10 @@ func createTestRSACertificate(t *testing.T) *x509.Certificate {
 		Subject: pkix.Name{
 			CommonName: "Test RSA User",
 		},
-		NotBefore:         time.Now(),
-		NotAfter:          time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:          x509.KeyUsageKeyEncipherment,
-		PublicKey:         privKey.Public(),
+		NotBefore:          time.Now(),
+		NotAfter:           time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:           x509.KeyUsageKeyEncipherment,
+		PublicKey:          privKey.Public(),
 		PublicKeyAlgorithm: x509.RSA,
 	}
 
@@ -59,10 +59,10 @@ func createTestECCertificate(t *testing.T) *x509.Certificate {
 		Subject: pkix.Name{
 			CommonName: "Test EC User",
 		},
-		NotBefore:         time.Now(),
-		NotAfter:          time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:          x509.KeyUsageKeyAgreement,
-		PublicKey:         privKey.Public(),
+		NotBefore:          time.Now(),
+		NotAfter:           time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:           x509.KeyUsageKeyAgreement,
+		PublicKey:          privKey.Public(),
 		PublicKeyAlgorithm: x509.ECDSA,
 	}
 
@@ -139,16 +139,16 @@ func TestBuilder_WithRecipientCertificate(t *testing.T) {
 
 func TestBuilder_WithRecipientCertificate_InvalidKeyUsage(t *testing.T) {
 	builder := NewBuilder()
-	
+
 	// Create certificate without keyEncipherment
 	privKey, _ := rsa.GenerateKey(rand.Reader, 2048)
 	template := x509.Certificate{
-		SerialNumber:      big.NewInt(1),
-		Subject:           pkix.Name{CommonName: "Test"},
-		NotBefore:         time.Now(),
-		NotAfter:          time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:          x509.KeyUsageDigitalSignature, // Missing keyEncipherment
-		PublicKey:         privKey.Public(),
+		SerialNumber:       big.NewInt(1),
+		Subject:            pkix.Name{CommonName: "Test"},
+		NotBefore:          time.Now(),
+		NotAfter:           time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:           x509.KeyUsageDigitalSignature, // Missing keyEncipherment
+		PublicKey:          privKey.Public(),
 		PublicKeyAlgorithm: x509.RSA,
 	}
 
@@ -164,7 +164,9 @@ func TestBuilder_WithRecipientCertificate_InvalidKeyUsage(t *testing.T) {
 func TestBuilder_validateParameters_NoDataFile(t *testing.T) {
 	builder := NewBuilder()
 	cert := createTestRSACertificate(t)
-	builder.WithRecipientCertificate(cert)
+	if err := builder.WithRecipientCertificate(cert); err != nil {
+		t.Fatalf("WithRecipientCertificate() failed: %v", err)
+	}
 
 	err := builder.validateParameters()
 	if err == nil {
@@ -186,7 +188,7 @@ func TestBuilder_BuildToWriter(t *testing.T) {
 	builder := NewBuilder()
 	builder.Version(Version11)
 	builder.WithDataFile("test.txt", strings.NewReader("Hello, World!"), 13)
-	
+
 	cert := createTestRSACertificate(t)
 	if err := builder.WithRecipientCertificate(cert); err != nil {
 		t.Fatalf("Failed to add recipient: %v", err)
@@ -207,7 +209,7 @@ func TestBuilder_BuildToWriter(t *testing.T) {
 	if len(outputBytes) == 0 {
 		t.Error("BuildToWriter() produced no output")
 	}
-	
+
 	// Verify it contains EncryptedData
 	if !bytes.Contains(outputBytes, []byte("EncryptedData")) {
 		t.Error("BuildToWriter() output should contain EncryptedData element")
@@ -218,7 +220,7 @@ func TestBuilder_BuildToWriter_CDOC10(t *testing.T) {
 	builder := NewBuilder()
 	builder.Version(Version10)
 	builder.WithDataFile("test.txt", strings.NewReader("Hello, World!"), 13)
-	
+
 	cert := createTestRSACertificate(t)
 	if err := builder.WithRecipientCertificate(cert); err != nil {
 		t.Fatalf("Failed to add recipient: %v", err)
@@ -235,7 +237,7 @@ func TestBuilder_BuildToWriter_CDOC10(t *testing.T) {
 	if len(outputBytes) == 0 {
 		t.Error("BuildToWriter() produced no output")
 	}
-	
+
 	// Verify it contains EncryptedData
 	if !bytes.Contains(outputBytes, []byte("EncryptedData")) {
 		t.Error("BuildToWriter() output should contain EncryptedData element")
@@ -251,7 +253,7 @@ func TestBuilder_BuildToWriter_ECRecipient(t *testing.T) {
 	builder := NewBuilder()
 	builder.Version(Version11)
 	builder.WithDataFile("test.txt", strings.NewReader("Hello, World!"), 13)
-	
+
 	cert := createTestECCertificate(t)
 	if err := builder.WithRecipientCertificate(cert); err != nil {
 		t.Fatalf("Failed to add EC recipient: %v", err)
@@ -272,7 +274,7 @@ func TestBuilder_BuildToWriter_MultipleRecipients(t *testing.T) {
 	builder := NewBuilder()
 	builder.Version(Version11)
 	builder.WithDataFile("test.txt", strings.NewReader("Hello, World!"), 13)
-	
+
 	rsaCert := createTestRSACertificate(t)
 	ecCert := createTestECCertificate(t)
 
@@ -304,4 +306,3 @@ func TestBuilder_BuildToWriter_MultipleRecipients(t *testing.T) {
 		t.Errorf("Expected 2 recipients, got %d", len(recipients))
 	}
 }
-

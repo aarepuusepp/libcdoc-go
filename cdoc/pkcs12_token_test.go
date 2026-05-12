@@ -16,7 +16,7 @@ import (
 
 // createTestPKCS12Keystore creates a test PKCS#12 keystore
 func createTestPKCS12Keystore(t *testing.T, privKey *rsa.PrivateKey, cert *x509.Certificate, password string) []byte {
-	p12Data, err := pkcs12.Encode(rand.Reader, privKey, cert, nil, password)
+	p12Data, err := pkcs12.LegacyRC2.WithRand(rand.Reader).Encode(privKey, cert, nil, password)
 	if err != nil {
 		t.Fatalf("Failed to create PKCS#12 keystore: %v", err)
 	}
@@ -87,20 +87,24 @@ func TestDecrypter_WithPKCS12Token_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
-	defer tmpFile.Close()
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	defer func() { _ = tmpFile.Close() }()
 
 	if _, err := tmpFile.Write(p12Data); err != nil {
 		t.Fatalf("Failed to write PKCS#12 data: %v", err)
 	}
-	tmpFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		t.Fatalf("Failed to close temp file: %v", err)
+	}
 
 	// Encrypt a test file
 	testContent := "test file content for PKCS#12 decryption"
 	builder := NewBuilder()
 	builder.Version(Version11)
 	builder.WithDataFile("test.txt", strings.NewReader(testContent), int64(len(testContent)))
-	builder.WithRecipientCertificate(cert)
+	if err := builder.WithRecipientCertificate(cert); err != nil {
+		t.Fatalf("WithRecipientCertificate() failed: %v", err)
+	}
 
 	var encrypted bytes.Buffer
 	if err := builder.BuildToWriter(&encrypted); err != nil {
@@ -127,4 +131,3 @@ func TestDecrypter_WithPKCS12Token_RoundTrip(t *testing.T) {
 		t.Errorf("Content mismatch. Expected %s, got %s", testContent, string(decryptedFiles[0].Content))
 	}
 }
-

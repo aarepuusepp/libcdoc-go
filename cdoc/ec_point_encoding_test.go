@@ -19,6 +19,7 @@ func TestEncodeECPublicKeyBytes_UncompressedPointMatchesEllipticMarshal(t *testi
 		t.Fatalf("encodeECPublicKeyBytes() error: %v", err)
 	}
 
+	//nolint:staticcheck // Test asserts compatibility with the legacy SEC1 uncompressed point encoding.
 	want := elliptic.Marshal(elliptic.P384(), privKey.PublicKey.X, privKey.PublicKey.Y)
 
 	if len(got) != 97 {

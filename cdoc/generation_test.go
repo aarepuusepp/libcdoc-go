@@ -35,10 +35,10 @@ func createTestRSACertWithKey(t *testing.T) (*rsa.PrivateKey, *x509.Certificate)
 		Subject: pkix.Name{
 			CommonName: "Test RSA User",
 		},
-		NotBefore:         time.Now(),
-		NotAfter:          time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:          x509.KeyUsageKeyEncipherment,
-		PublicKey:         privKey.Public(),
+		NotBefore:          time.Now(),
+		NotAfter:           time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:           x509.KeyUsageKeyEncipherment,
+		PublicKey:          privKey.Public(),
 		PublicKeyAlgorithm: x509.RSA,
 	}
 
@@ -67,10 +67,10 @@ func createTestECCertWithKey(t *testing.T) (*ecdsa.PrivateKey, *x509.Certificate
 		Subject: pkix.Name{
 			CommonName: "Test EC User",
 		},
-		NotBefore:         time.Now(),
-		NotAfter:          time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:          x509.KeyUsageKeyAgreement,
-		PublicKey:         privKey.Public(),
+		NotBefore:          time.Now(),
+		NotAfter:           time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:           x509.KeyUsageKeyAgreement,
+		PublicKey:          privKey.Public(),
 		PublicKeyAlgorithm: x509.ECDSA,
 	}
 
@@ -359,7 +359,9 @@ func TestGeneration_BuilderValidation(t *testing.T) {
 		_, cert := createTestRSACertWithKey(t)
 		builder := NewBuilder()
 		builder.Version(Version11)
-		builder.WithRecipientCertificate(cert)
+		if err := builder.WithRecipientCertificate(cert); err != nil {
+			t.Fatalf("WithRecipientCertificate() failed: %v", err)
+		}
 
 		var output bytes.Buffer
 		err := builder.BuildToWriter(&output)
@@ -390,7 +392,7 @@ func TestGeneration_OutputSize(t *testing.T) {
 	}
 
 	outputSize := output.Len()
-	
+
 	// Output should be larger than input (XML structure, encryption overhead, etc.)
 	// CDOC format includes: XML structure, encrypted keys, IV, ciphertext, metadata
 	// Typical overhead: 2-10x for small files (due to XML structure)
@@ -401,11 +403,10 @@ func TestGeneration_OutputSize(t *testing.T) {
 
 	// More lenient check - allow up to 500x for very small files (XML overhead is proportionally larger)
 	if outputSize > len(testContent)*500 {
-		t.Errorf("Output size %d seems unreasonably large for input size %d (max expected: %d)", 
+		t.Errorf("Output size %d seems unreasonably large for input size %d (max expected: %d)",
 			outputSize, len(testContent), len(testContent)*500)
 	}
 
-	t.Logf("CDOC output size: %d bytes for %d bytes of content (overhead: %.1fx)", 
+	t.Logf("CDOC output size: %d bytes for %d bytes of content (overhead: %.1fx)",
 		outputSize, len(testContent), float64(outputSize)/float64(len(testContent)))
 }
-

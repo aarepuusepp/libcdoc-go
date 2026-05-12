@@ -11,71 +11,71 @@ import (
 // TestParser_CDOCFiles_CreatedByCdoc4j tests parsing actual CDOC files created by cdoc4j
 func TestParser_CDOCFiles_CreatedByCdoc4j(t *testing.T) {
 	testFiles := []struct {
-		name         string
-		filename     string
-		expectedVersion Version
+		name               string
+		filename           string
+		expectedVersion    Version
 		expectedRecipients int
-		description  string
+		description        string
 	}{
 		{
-			name:         "CDOC 1.0 RSA single file",
-			filename:     "valid_cdoc10.cdoc",
-			expectedVersion: Version10,
+			name:               "CDOC 1.0 RSA single file",
+			filename:           "valid_cdoc10.cdoc",
+			expectedVersion:    Version10,
 			expectedRecipients: 1,
-			description:  "CDOC 1.0 with RSA recipient and single file",
+			description:        "CDOC 1.0 with RSA recipient and single file",
 		},
 		{
-			name:         "CDOC 1.0 RSA with DDOC",
-			filename:     "valid_cdoc10_withDDOC.cdoc",
-			expectedVersion: Version10,
+			name:               "CDOC 1.0 RSA with DDOC",
+			filename:           "valid_cdoc10_withDDOC.cdoc",
+			expectedVersion:    Version10,
 			expectedRecipients: 1,
-			description:  "CDOC 1.0 with RSA recipient and multiple files (DDOC)",
+			description:        "CDOC 1.0 with RSA recipient and multiple files (DDOC)",
 		},
 		{
-			name:         "CDOC 1.0 RSA multiple recipients",
-			filename:     "valid_cdoc10_withMultipleRecipients.cdoc",
-			expectedVersion: Version10,
+			name:               "CDOC 1.0 RSA multiple recipients",
+			filename:           "valid_cdoc10_withMultipleRecipients.cdoc",
+			expectedVersion:    Version10,
 			expectedRecipients: 2,
-			description:  "CDOC 1.0 with RSA recipients (multiple)",
+			description:        "CDOC 1.0 with RSA recipients (multiple)",
 		},
 		{
-			name:         "CDOC 1.1 RSA single file",
-			filename:     "valid_cdoc11_RSA.cdoc",
-			expectedVersion: Version11,
+			name:               "CDOC 1.1 RSA single file",
+			filename:           "valid_cdoc11_RSA.cdoc",
+			expectedVersion:    Version11,
 			expectedRecipients: 1,
-			description:  "CDOC 1.1 with RSA recipient and single file",
+			description:        "CDOC 1.1 with RSA recipient and single file",
 		},
 		{
-			name:         "CDOC 1.1 RSA with DDOC",
-			filename:     "valid_cdoc11_RSA_withDDOC.cdoc",
-			expectedVersion: Version11,
+			name:               "CDOC 1.1 RSA with DDOC",
+			filename:           "valid_cdoc11_RSA_withDDOC.cdoc",
+			expectedVersion:    Version11,
 			expectedRecipients: 1,
-			description:  "CDOC 1.1 with RSA recipient and multiple files (DDOC)",
+			description:        "CDOC 1.1 with RSA recipient and multiple files (DDOC)",
 		},
 		{
-			name:         "CDOC 1.1 EC single file",
-			filename:     "valid_cdoc11_ECC.cdoc",
-			expectedVersion: Version11,
+			name:               "CDOC 1.1 EC single file",
+			filename:           "valid_cdoc11_ECC.cdoc",
+			expectedVersion:    Version11,
 			expectedRecipients: 1,
-			description:  "CDOC 1.1 with EC recipient and single file",
+			description:        "CDOC 1.1 with EC recipient and single file",
 		},
 		{
-			name:         "CDOC 1.1 EC with DDOC",
-			filename:     "valid_cdoc11_ECC_withDDOC.cdoc",
-			expectedVersion: Version11,
+			name:               "CDOC 1.1 EC with DDOC",
+			filename:           "valid_cdoc11_ECC_withDDOC.cdoc",
+			expectedVersion:    Version11,
 			expectedRecipients: 1,
-			description:  "CDOC 1.1 with EC recipient and multiple files (DDOC)",
+			description:        "CDOC 1.1 with EC recipient and multiple files (DDOC)",
 		},
 		{
-			name:         "CDOC 1.1 multiple recipients",
-			filename:     "valid_cdoc11_withMultipleRecipients.cdoc",
-			expectedVersion: Version11,
+			name:               "CDOC 1.1 multiple recipients",
+			filename:           "valid_cdoc11_withMultipleRecipients.cdoc",
+			expectedVersion:    Version11,
 			expectedRecipients: 2,
-			description:  "CDOC 1.1 with multiple recipients",
+			description:        "CDOC 1.1 with multiple recipients",
 		},
 	}
 
-		for _, tt := range testFiles {
+	for _, tt := range testFiles {
 		t.Run(tt.name, func(t *testing.T) {
 			// Try relative path first (for running from project root)
 			cdocPath := filepath.Join("testdata", "cdoc", tt.filename)
@@ -92,7 +92,7 @@ func TestParser_CDOCFiles_CreatedByCdoc4j(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to open CDOC file: %v", err)
 			}
-			defer cdocFile.Close()
+			defer func() { _ = cdocFile.Close() }()
 
 			parser := NewParser()
 			if err := parser.Parse(cdocFile); err != nil {
@@ -153,9 +153,9 @@ func TestParser_CDOCFiles_CreatedByCdoc4j(t *testing.T) {
 
 			// Verify MimeType
 			mimeType := parser.GetMimeType()
-			if tt.filename == "valid_cdoc10_withDDOC.cdoc" || 
-			   tt.filename == "valid_cdoc11_RSA_withDDOC.cdoc" ||
-			   tt.filename == "valid_cdoc11_ECC_withDDOC.cdoc" {
+			if tt.filename == "valid_cdoc10_withDDOC.cdoc" ||
+				tt.filename == "valid_cdoc11_RSA_withDDOC.cdoc" ||
+				tt.filename == "valid_cdoc11_ECC_withDDOC.cdoc" {
 				if mimeType != DDOCMimeType {
 					t.Errorf("Expected DDOC mime type, got %s", mimeType)
 				}
@@ -192,7 +192,7 @@ func TestParser_CDOC10_SpecificFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open CDOC file: %v", err)
 	}
-	defer cdocFile.Close()
+	defer func() { _ = cdocFile.Close() }()
 
 	parser := NewParser()
 	if err := parser.Parse(cdocFile); err != nil {
@@ -243,7 +243,7 @@ func TestParser_CDOC11_RSA_SpecificFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open CDOC file: %v", err)
 	}
-	defer cdocFile.Close()
+	defer func() { _ = cdocFile.Close() }()
 
 	parser := NewParser()
 	if err := parser.Parse(cdocFile); err != nil {
@@ -291,7 +291,7 @@ func TestParser_CDOC11_EC_SpecificFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open CDOC file: %v", err)
 	}
-	defer cdocFile.Close()
+	defer func() { _ = cdocFile.Close() }()
 
 	parser := NewParser()
 	if err := parser.Parse(cdocFile); err != nil {
@@ -343,7 +343,7 @@ func TestParser_CDOC11_MultipleRecipients(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open CDOC file: %v", err)
 	}
-	defer cdocFile.Close()
+	defer func() { _ = cdocFile.Close() }()
 
 	parser := NewParser()
 	if err := parser.Parse(cdocFile); err != nil {
@@ -390,7 +390,7 @@ func TestParser_InvalidCDOCFiles(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to open CDOC file: %v", err)
 			}
-			defer cdocFile.Close()
+			defer func() { _ = cdocFile.Close() }()
 
 			parser := NewParser()
 			// These should either fail to parse or parse with warnings
@@ -401,4 +401,3 @@ func TestParser_InvalidCDOCFiles(t *testing.T) {
 		})
 	}
 }
-

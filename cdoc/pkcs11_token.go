@@ -7,10 +7,10 @@ import (
 	"crypto/ecdsa"
 	"crypto/x509"
 
-	"github.com/miekg/pkcs11"
 	"github.com/aarepuusepp/libcdoc-go/v2/crypto"
 	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 	"github.com/aarepuusepp/libcdoc-go/v2/key"
+	"github.com/miekg/pkcs11"
 )
 
 // PKCS11Token implements the Token interface for PKCS#11 hardware tokens
@@ -31,14 +31,14 @@ func NewPKCS11Token(config key.PKCS11Config) (*PKCS11Token, error) {
 	// Find private key on token
 	keyHandle, err := context.FindPrivateKey(config.Label, config.KeyID)
 	if err != nil {
-		context.Close()
+		_ = context.Close()
 		return nil, internal.NewDecryptionError("failed to find private key on token", err)
 	}
 
 	// Find certificate on token (for recipient matching)
 	certificate, err := context.FindCertificate(config.Label, config.KeyID)
 	if err != nil {
-		context.Close()
+		_ = context.Close()
 		return nil, internal.NewDecryptionError("failed to find certificate on token", err)
 	}
 
@@ -129,4 +129,3 @@ func (t *PKCS11Token) DecryptECSharedSecret(ephemeralPublicKey *ecdsa.PublicKey)
 	// Return shared secret directly (CDOC2 will handle HKDF separately)
 	return sharedSecret, nil
 }
-

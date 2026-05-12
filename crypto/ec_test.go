@@ -211,7 +211,7 @@ func TestExtractECPublicKeyFromCertificate(t *testing.T) {
 	}
 
 	if pubKey == nil {
-		t.Error("ExtractECPublicKeyFromCertificate() should return non-nil public key")
+		t.Fatal("ExtractECPublicKeyFromCertificate() should return non-nil public key")
 	}
 
 	if pubKey.Curve != elliptic.P384() {
@@ -236,6 +236,7 @@ func TestGenerateECKeyPair(t *testing.T) {
 		t.Errorf("GenerateECKeyPair() curve = %v, want P384", ephemeralPriv.Curve)
 	}
 
+	//nolint:staticcheck // Test verifies the generated legacy ecdsa.PrivateKey has a non-zero scalar.
 	if ephemeralPriv.D.Cmp(big.NewInt(0)) == 0 {
 		t.Error("GenerateECKeyPair() private key should not be zero")
 	}

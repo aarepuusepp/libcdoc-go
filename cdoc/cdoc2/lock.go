@@ -2,7 +2,7 @@ package cdoc2
 
 import (
 	"crypto/ecdsa"
-    "crypto/rsa"
+	"crypto/rsa"
 	"crypto/x509"
 	"fmt"
 
@@ -13,11 +13,11 @@ import (
 type LockType int
 
 const (
-	LockTypeUnknown LockType = iota
-	LockTypePublicKey      // RSA or ECC public key
-	LockTypeServer         // Key server (Smart-ID/Mobile-ID)
-	LockTypeSymmetricKey   // Symmetric key
-	LockTypePassword       // Password-based (PBKDF2)
+	LockTypeUnknown      LockType = iota
+	LockTypePublicKey             // RSA or ECC public key
+	LockTypeServer                // Key server (Smart-ID/Mobile-ID)
+	LockTypeSymmetricKey          // Symmetric key
+	LockTypePassword              // Password-based (PBKDF2)
 )
 
 // PKType represents the public key type
@@ -37,10 +37,10 @@ type Lock struct {
 	EncryptedFMK []byte
 
 	// For PUBLIC_KEY and SERVER types
-	RecipientKey    []byte // Public key (RSA or ECC)
-	KeyMaterial     []byte // Encrypted KEK (RSA) or ephemeral public key (ECC)
-	ServerID        string // For SERVER type
-	TransactionID   string // For SERVER type
+	RecipientKey  []byte // Public key (RSA or ECC)
+	KeyMaterial   []byte // Encrypted KEK (RSA) or ephemeral public key (ECC)
+	ServerID      string // For SERVER type
+	TransactionID string // For SERVER type
 
 	// For SYMMETRIC_KEY type
 	Salt []byte
@@ -55,53 +55,53 @@ type Lock struct {
 
 // Capsule concrete types for parsed header mapping
 type RSAPublicKeyCapsule struct {
-    RecipientPublicKey []byte
-    EncryptedKEK       []byte
+	RecipientPublicKey []byte
+	EncryptedKEK       []byte
 }
 
 func (RSAPublicKeyCapsule) Type() string { return "RSA" }
 
 type ECCPublicKeyCapsule struct {
-    RecipientPublicKey []byte
-    SenderPublicKey    []byte
+	RecipientPublicKey []byte
+	SenderPublicKey    []byte
 }
 
 func (ECCPublicKeyCapsule) Type() string { return "ECC" }
 
 type SymmetricKeyCapsule struct {
-    Salt []byte
+	Salt []byte
 }
 
 func (SymmetricKeyCapsule) Type() string { return "SYMMETRIC" }
 
 type PBKDF2Capsule struct {
-    Salt         []byte
-    PasswordSalt []byte
-    Iterations   int32
+	Salt         []byte
+	PasswordSalt []byte
+	Iterations   int32
 }
 
 func (PBKDF2Capsule) Type() string { return "PBKDF2" }
 
 type KeyServerCapsule struct {
-    RecipientKey  []byte
-    PKType        PKType
-    KeyServerID   string
-    TransactionID string
+	RecipientKey  []byte
+	PKType        PKType
+	KeyServerID   string
+	TransactionID string
 }
 
 func (KeyServerCapsule) Type() string { return "KEYSERVER" }
 
 type KeyShare struct {
-    URL          string
-    TransactionID string
+	URL           string
+	TransactionID string
 }
 
 type KeySharesCapsule struct {
-    Shares        []KeyShare
-    Salt          []byte
-    RecipientType byte
-    Scheme        byte
-    RecipientID   string
+	Shares        []KeyShare
+	Salt          []byte
+	RecipientType byte
+	Scheme        byte
+	RecipientID   string
 }
 
 func (KeySharesCapsule) Type() string { return "KEYSHARES" }
@@ -137,6 +137,8 @@ func (l *Lock) MatchesCertificate(cert *x509.Certificate) (bool, error) {
 // extractPublicKeyBytes extracts the public key bytes from a certificate
 // For RSA: DER-encoded public key
 // For ECC: TLS 1.3 format (0x04 + X + Y coordinates)
+//
+//nolint:staticcheck // CDOC2 key-server locks require raw EC point coordinate encoding.
 func extractPublicKeyBytes(cert *x509.Certificate) ([]byte, error) {
 	switch pubKey := cert.PublicKey.(type) {
 	case *ecdsa.PublicKey:
@@ -147,28 +149,28 @@ func extractPublicKeyBytes(cert *x509.Certificate) ([]byte, error) {
 				nil,
 			)
 		}
-		
+
 		keySize := 48 // secp384r1 coordinate size
 		result := make([]byte, 1+keySize*2)
 		result[0] = 0x04 // Uncompressed point format
-		
+
 		// Convert X and Y to bytes (big-endian, padded to keySize)
 		xBytes := pubKey.X.Bytes()
 		yBytes := pubKey.Y.Bytes()
-		
+
 		copy(result[1+keySize-len(xBytes):1+keySize], xBytes)
 		copy(result[1+keySize*2-len(yBytes):1+keySize*2], yBytes)
-		
+
 		return result, nil
 	default:
-        // RSA: return SubjectPublicKeyInfo DER bytes
-        if _, ok := cert.PublicKey.(*rsa.PublicKey); ok {
-            return cert.RawSubjectPublicKeyInfo, nil
-        }
-        return nil, internal.NewParseError(
-            "unsupported public key type",
-            nil,
-        )
+		// RSA: return SubjectPublicKeyInfo DER bytes
+		if _, ok := cert.PublicKey.(*rsa.PublicKey); ok {
+			return cert.RawSubjectPublicKeyInfo, nil
+		}
+		return nil, internal.NewParseError(
+			"unsupported public key type",
+			nil,
+		)
 	}
 }
 
@@ -181,4 +183,3 @@ func (l *Lock) IsRSA() bool {
 func (l *Lock) IsECC() bool {
 	return l.Type == LockTypePublicKey && l.PKType == PKTypeECC
 }
-

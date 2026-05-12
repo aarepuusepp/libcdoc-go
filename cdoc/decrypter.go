@@ -26,8 +26,6 @@ type Decrypter struct {
 	symmetricKey     []byte                 // For symmetric key decryption (CDOC 2.0)
 	keyServerClient  interface{}            // *cdoc2/keyserver.Client - set via SetKeyServerClient
 	keyServerConfigs map[string]interface{} // map[serverID]*cdoc2/keyserver.KeyServerConfig
-	outputDir        string
-	outputWriter     io.Writer
 }
 
 // NewDecrypter creates a new Decrypter instance
@@ -163,7 +161,7 @@ func (d *Decrypter) WithPKCS11Token(config key.PKCS11Config) error {
 	// Automatically set certificate from token
 	cert, err := token.GetCertificate()
 	if err != nil {
-		token.Close()
+		_ = token.Close()
 		return internal.NewDecryptionError("failed to get certificate from PKCS#11 token", err)
 	}
 	d.certificate = cert
@@ -186,7 +184,7 @@ func (d *Decrypter) Decrypt() ([]DecryptedFile, error) {
 		if err != nil {
 			return nil, internal.NewDecryptionError("failed to reopen CDOC file", err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		readerAt = f
 	} else {
 		// Buffer into memory
@@ -434,7 +432,7 @@ func (d *Decrypter) decryptCDOC2(r io.ReaderAt) ([]DecryptedFile, error) {
 	if err := rdr.BeginDecryption(fmk); err != nil {
 		return nil, err
 	}
-	defer rdr.FinishDecryption()
+	defer func() { _ = rdr.FinishDecryption() }()
 
 	// Iterate tar entries and collect files
 	var files []DecryptedFile

@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/aarepuusepp/libcdoc-go/v2/cert"
-	"github.com/aarepuusepp/libcdoc-go/v2/key"
 	"github.com/aarepuusepp/libcdoc-go/v2/xmlenc"
 )
 
@@ -18,7 +17,7 @@ func loadTestCert(t *testing.T, certPathParts ...string) *x509.Certificate {
 	// Try testdata first (copied from cdoc4j)
 	parts := append([]string{"testdata"}, certPathParts...)
 	fullPath := filepath.Join(parts...)
-	
+
 	// Fallback to cdoc4j if testdata doesn't exist (for backward compatibility)
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
 		oldParts := append([]string{"cdoc4j", "src", "test", "resources"}, certPathParts...)
@@ -42,31 +41,6 @@ func loadTestCert(t *testing.T, certPathParts ...string) *x509.Certificate {
 }
 
 // Helper function to load test private key from testdata resources
-func loadTestKey(t *testing.T, keyPath string) *key.PrivateKey {
-	// Try testdata first (copied from cdoc4j)
-	fullPath := filepath.Join("testdata", keyPath)
-	
-	// Fallback to cdoc4j if testdata doesn't exist (for backward compatibility)
-	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		fullPath = filepath.Join("cdoc4j", "src", "test", "resources", keyPath)
-		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-			t.Skipf("Test key not found at %s, skipping interoperability test", fullPath)
-		}
-	}
-
-	keyData, err := os.ReadFile(fullPath)
-	if err != nil {
-		t.Fatalf("Failed to read private key: %v", err)
-	}
-
-	pk, err := key.ParsePrivateKeyPEM(keyData)
-	if err != nil {
-		t.Fatalf("Failed to parse private key: %v", err)
-	}
-
-	return pk
-}
-
 // TestDecryptCDOC11_RSA_CreatedByCdoc4j tests decrypting a CDOC 1.1 file created by cdoc4j with RSA recipient
 func TestDecryptCDOC11_RSA_CreatedByCdoc4j(t *testing.T) {
 	// Try testdata first, fallback to cdoc4j
@@ -81,12 +55,12 @@ func TestDecryptCDOC11_RSA_CreatedByCdoc4j(t *testing.T) {
 	// For this test, we need the corresponding private key
 	// Since cdoc4j uses PKCS#12, we'll need to extract or convert the key
 	// For now, this test documents the expected behavior
-	
+
 	cdocFile, err := os.Open(cdocPath)
 	if err != nil {
 		t.Fatalf("Failed to open CDOC file: %v", err)
 	}
-	defer cdocFile.Close()
+	defer func() { _ = cdocFile.Close() }()
 
 	// Parse the CDOC to verify structure
 	parser := NewParser()
@@ -136,7 +110,7 @@ func TestDecryptCDOC11_ECC_CreatedByCdoc4j(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open CDOC file: %v", err)
 	}
-	defer cdocFile.Close()
+	defer func() { _ = cdocFile.Close() }()
 
 	parser := NewParser()
 	err = parser.Parse(cdocFile)
@@ -185,7 +159,7 @@ func TestDecryptCDOC11_RSA_WithDDOC_CreatedByCdoc4j(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open CDOC file: %v", err)
 	}
-	defer cdocFile.Close()
+	defer func() { _ = cdocFile.Close() }()
 
 	parser := NewParser()
 	err = parser.Parse(cdocFile)
@@ -214,7 +188,7 @@ func TestEncryptCDOC11_ForCdoc4j(t *testing.T) {
 	builder := NewBuilder()
 	builder.Version(Version11)
 	builder.WithDataFile(testFileName, strings.NewReader(testContent), int64(len(testContent)))
-	
+
 	err := builder.WithRecipientCertificate(cert)
 	if err != nil {
 		t.Fatalf("Failed to add recipient: %v", err)
@@ -269,7 +243,7 @@ func TestEncryptCDOC11_EC_ForCdoc4j(t *testing.T) {
 	builder := NewBuilder()
 	builder.Version(Version11)
 	builder.WithDataFile(testFileName, strings.NewReader(testContent), int64(len(testContent)))
-	
+
 	err := builder.WithRecipientCertificate(cert)
 	if err != nil {
 		t.Fatalf("Failed to add recipient: %v", err)
@@ -312,10 +286,10 @@ func TestEncryptCDOC11_EC_ForCdoc4j(t *testing.T) {
 func TestEncryptDecryptRoundTrip_RSA(t *testing.T) {
 	// For this test, we need both certificate and private key
 	// Since we may not have access to test keys, we'll generate them for testing
-	
+
 	// Note: In real interoperability tests, use actual test certificates
 	t.Skip("Skipping round-trip test - requires test certificates with private keys")
-	
+
 	// TODO: When test certificates with keys are available:
 	// 1. Load certificate
 	// 2. Load private key
@@ -335,12 +309,12 @@ func TestMultipleRecipients(t *testing.T) {
 	builder := NewBuilder()
 	builder.Version(Version11)
 	builder.WithDataFile(testFileName, strings.NewReader(testContent), int64(len(testContent)))
-	
+
 	err := builder.WithRecipientCertificate(rsaCert)
 	if err != nil {
 		t.Fatalf("Failed to add RSA recipient: %v", err)
 	}
-	
+
 	err = builder.WithRecipientCertificate(ecCert)
 	if err != nil {
 		t.Fatalf("Failed to add EC recipient: %v", err)
@@ -384,8 +358,10 @@ func BenchmarkCDOC11Encryption(b *testing.B) {
 		builder := NewBuilder()
 		builder.Version(Version11)
 		builder.WithDataFile(testFileName, strings.NewReader(testContent), int64(len(testContent)))
-		builder.WithRecipientCertificate(cert)
-		
+		if err := builder.WithRecipientCertificate(cert); err != nil {
+			b.Fatalf("WithRecipientCertificate() failed: %v", err)
+		}
+
 		var output bytes.Buffer
 		if err := builder.BuildToWriter(&output); err != nil {
 			b.Fatalf("Encryption failed: %v", err)
@@ -399,7 +375,7 @@ func verifyCDOCStructure(t *testing.T, cdocPath string, expectedVersion Version)
 	if err != nil {
 		t.Fatalf("Failed to open CDOC file: %v", err)
 	}
-	defer cdocFile.Close()
+	defer func() { _ = cdocFile.Close() }()
 
 	parser := NewParser()
 	err = parser.Parse(cdocFile)
@@ -455,4 +431,3 @@ func TestCDOC11StructureValidation(t *testing.T) {
 		})
 	}
 }
-

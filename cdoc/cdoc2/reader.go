@@ -17,11 +17,11 @@ import (
 type Reader struct {
 	source          io.ReaderAt
 	header          *Header
-    headerHMAC      []byte
+	headerHMAC      []byte
 	fmk             []byte
 	currentTar      *tar.Reader
 	decryptedStream io.Reader
-	
+
 	// Key server support
 	keyServerClient  *keyserver.Client
 	keyServerConfigs map[string]keyserver.KeyServerConfig
@@ -29,8 +29,8 @@ type Reader struct {
 
 // KeyServerAction provides key server client and config for decryption
 type KeyServerAction struct {
-    KeyServerClient *keyserver.Client
-    KeyServerConfig keyserver.KeyServerConfig
+	KeyServerClient *keyserver.Client
+	KeyServerConfig keyserver.KeyServerConfig
 }
 
 // FMKOptions provides decryption inputs for different recipient types
@@ -77,7 +77,7 @@ func (r *Reader) AddKeyServerConfig(config keyserver.KeyServerConfig) {
 // This should be called first before decryption
 func (r *Reader) ReadHeader() (*Header, error) {
 	reader := io.NewSectionReader(r.source, 0, 1<<31-1) // Max int32 size
-	
+
 	header, headerHMAC, err := ParseHeader(reader)
 	if err != nil {
 		return nil, err
@@ -96,54 +96,54 @@ func (r *Reader) GetLocks() ([]Lock, error) {
 		return nil, internal.NewDecryptionError("header not read, call ReadHeader() first", nil)
 	}
 
-    locks := make([]Lock, 0, len(r.header.Recipients))
-    for _, rr := range r.header.Recipients {
-        l := Lock{
-            Label:        rr.KeyLabel,
-            EncryptedFMK: append([]byte(nil), rr.EncryptedFMK...),
-        }
-        switch rr.FMKEncryptionMethod {
-        case FMKEncryptionMethodXOR:
-            // supported
-        default:
-            // keep unknown
-        }
+	locks := make([]Lock, 0, len(r.header.Recipients))
+	for _, rr := range r.header.Recipients {
+		l := Lock{
+			Label:        rr.KeyLabel,
+			EncryptedFMK: append([]byte(nil), rr.EncryptedFMK...),
+		}
+		switch rr.FMKEncryptionMethod {
+		case FMKEncryptionMethodXOR:
+			// supported
+		default:
+			// keep unknown
+		}
 
-        switch c := rr.Capsule.(type) {
-        case RSAPublicKeyCapsule:
-            l.Type = LockTypePublicKey
-            l.PKType = PKTypeRSA
-            l.RecipientKey = append([]byte(nil), c.RecipientPublicKey...)
-            l.KeyMaterial = append([]byte(nil), c.EncryptedKEK...)
-        case ECCPublicKeyCapsule:
-            l.Type = LockTypePublicKey
-            l.PKType = PKTypeECC
-            l.RecipientKey = append([]byte(nil), c.RecipientPublicKey...)
-            l.KeyMaterial = append([]byte(nil), c.SenderPublicKey...)
-        case SymmetricKeyCapsule:
-            l.Type = LockTypeSymmetricKey
-            l.Salt = append([]byte(nil), c.Salt...)
-        case PBKDF2Capsule:
-            l.Type = LockTypePassword
-            l.Salt = append([]byte(nil), c.Salt...)
-            l.PasswordSalt = append([]byte(nil), c.PasswordSalt...)
-            l.KDFIter = c.Iterations
-        case KeyServerCapsule:
-            l.Type = LockTypeServer
-            l.ServerID = c.KeyServerID
-            l.TransactionID = c.TransactionID
-            l.RecipientKey = append([]byte(nil), c.RecipientKey...)
-            l.PKType = c.PKType
-        case KeySharesCapsule:
-            // Not yet supported; skip for now
-            continue
-        default:
-            // Unknown capsule, skip
-            continue
-        }
-        locks = append(locks, l)
-    }
-    return locks, nil
+		switch c := rr.Capsule.(type) {
+		case RSAPublicKeyCapsule:
+			l.Type = LockTypePublicKey
+			l.PKType = PKTypeRSA
+			l.RecipientKey = append([]byte(nil), c.RecipientPublicKey...)
+			l.KeyMaterial = append([]byte(nil), c.EncryptedKEK...)
+		case ECCPublicKeyCapsule:
+			l.Type = LockTypePublicKey
+			l.PKType = PKTypeECC
+			l.RecipientKey = append([]byte(nil), c.RecipientPublicKey...)
+			l.KeyMaterial = append([]byte(nil), c.SenderPublicKey...)
+		case SymmetricKeyCapsule:
+			l.Type = LockTypeSymmetricKey
+			l.Salt = append([]byte(nil), c.Salt...)
+		case PBKDF2Capsule:
+			l.Type = LockTypePassword
+			l.Salt = append([]byte(nil), c.Salt...)
+			l.PasswordSalt = append([]byte(nil), c.PasswordSalt...)
+			l.KDFIter = c.Iterations
+		case KeyServerCapsule:
+			l.Type = LockTypeServer
+			l.ServerID = c.KeyServerID
+			l.TransactionID = c.TransactionID
+			l.RecipientKey = append([]byte(nil), c.RecipientKey...)
+			l.PKType = c.PKType
+		case KeySharesCapsule:
+			// Not yet supported; skip for now
+			continue
+		default:
+			// Unknown capsule, skip
+			continue
+		}
+		locks = append(locks, l)
+	}
+	return locks, nil
 }
 
 // ExtractFMK extracts the File Master Key for the given lock index
@@ -153,54 +153,54 @@ func (r *Reader) ExtractFMK(lockIndex int, opts FMKOptions) ([]byte, error) {
 		return nil, internal.NewDecryptionError("header not read", nil)
 	}
 
-    if lockIndex < 0 || lockIndex >= len(r.header.Recipients) {
+	if lockIndex < 0 || lockIndex >= len(r.header.Recipients) {
 		return nil, internal.NewDecryptionError(
 			"invalid lock index",
 			nil,
 		)
 	}
 
-    // Convert to Lock
-    locks, err := r.GetLocks()
-    if err != nil {
-        return nil, err
-    }
-    if lockIndex >= len(locks) {
-        return nil, internal.NewDecryptionError("lock index out of range", nil)
-    }
-    lock := locks[lockIndex]
+	// Convert to Lock
+	locks, err := r.GetLocks()
+	if err != nil {
+		return nil, err
+	}
+	if lockIndex >= len(locks) {
+		return nil, internal.NewDecryptionError("lock index out of range", nil)
+	}
+	lock := locks[lockIndex]
 
-    // Choose private key interface based on provided options
-    var priv interface{}
-    if opts.RSAPrivateKey != nil {
-        priv = opts.RSAPrivateKey
-    } else if opts.ECDSAPrivateKey != nil {
-        priv = opts.ECDSAPrivateKey
-    }
+	// Choose private key interface based on provided options
+	var priv interface{}
+	if opts.RSAPrivateKey != nil {
+		priv = opts.RSAPrivateKey
+	} else if opts.ECDSAPrivateKey != nil {
+		priv = opts.ECDSAPrivateKey
+	}
 
-    var keyServerAction *KeyServerAction
-    if opts.KeyServerAction != nil {
-        keyServerAction = opts.KeyServerAction
-    } else if lock.Type == LockTypeServer && r.keyServerClient != nil {
-        // Try to use reader's key server config
-        if config, ok := r.keyServerConfigs[lock.ServerID]; ok {
-            keyServerAction = &KeyServerAction{
-                KeyServerClient: r.keyServerClient,
-                KeyServerConfig: config,
-            }
-        }
-    }
-    fmk, err := ExtractFMKFromLock(lock, priv, opts.SymmetricKey, opts.Password, keyServerAction, opts.PKCS11Token)
-    if err != nil {
-        return nil, err
-    }
+	var keyServerAction *KeyServerAction
+	if opts.KeyServerAction != nil {
+		keyServerAction = opts.KeyServerAction
+	} else if lock.Type == LockTypeServer && r.keyServerClient != nil {
+		// Try to use reader's key server config
+		if config, ok := r.keyServerConfigs[lock.ServerID]; ok {
+			keyServerAction = &KeyServerAction{
+				KeyServerClient: r.keyServerClient,
+				KeyServerConfig: config,
+			}
+		}
+	}
+	fmk, err := ExtractFMKFromLock(lock, priv, opts.SymmetricKey, opts.Password, keyServerAction, opts.PKCS11Token)
+	if err != nil {
+		return nil, err
+	}
 
-    // Cache for later decryption
-    if r.fmk == nil {
-        r.fmk = make([]byte, len(fmk))
-    }
-    copy(r.fmk, fmk)
-    return fmk, nil
+	// Cache for later decryption
+	if r.fmk == nil {
+		r.fmk = make([]byte, len(fmk))
+	}
+	copy(r.fmk, fmk)
+	return fmk, nil
 }
 
 // BeginDecryption starts the decryption process using the provided FMK
@@ -323,7 +323,7 @@ func readAllFromReaderAt(r io.ReaderAt, offset int64) ([]byte, error) {
 	// Try to determine size if possible
 	var data []byte
 	buf := make([]byte, 32*1024) // 32KB chunks
-	
+
 	for {
 		n, err := r.ReadAt(buf, offset+int64(len(data)))
 		if n > 0 {
@@ -349,11 +349,10 @@ func decompressGzip(data []byte) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		defer reader.Close()
+		defer func() { _ = reader.Close() }()
 		return io.ReadAll(reader)
 	}
 
 	// Not compressed, return as-is
 	return data, nil
 }
-

@@ -17,7 +17,7 @@ func LoadCertificate(filepath string) (*x509.Certificate, error) {
 	if err != nil {
 		return nil, internal.NewCertificateError("failed to open certificate file", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	certData, err := io.ReadAll(file)
 	if err != nil {
@@ -34,7 +34,7 @@ func LoadPrivateKey(filepath string) (*key.PrivateKey, error) {
 	if err != nil {
 		return nil, internal.NewValidationError("failed to open private key file", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	keyData, err := io.ReadAll(file)
 	if err != nil {
@@ -48,4 +48,3 @@ func LoadPrivateKey(filepath string) (*key.PrivateKey, error) {
 
 	return privateKey, nil
 }
-

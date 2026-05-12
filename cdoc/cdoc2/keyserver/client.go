@@ -22,9 +22,9 @@ type Client struct {
 
 // KeyServerConfig holds configuration for a key server
 type KeyServerConfig struct {
-	ServerID   string        // UUID of the key server
-	PostURL    string        // POST URL for sending key material (e.g., https://cdoc2.id.ee:8443)
-	FetchURL   string        // GET URL for fetching key material (e.g., https://cdoc2.id.ee:8444)
+	ServerID   string            // UUID of the key server
+	PostURL    string            // POST URL for sending key material (e.g., https://cdoc2.id.ee:8443)
+	FetchURL   string            // GET URL for fetching key material (e.g., https://cdoc2.id.ee:8444)
 	TLSCert    *x509.Certificate // Optional TLS certificate for server verification
 	ClientCert *tls.Certificate  // Optional client TLS certificate for authentication
 }
@@ -44,8 +44,8 @@ type SendKeyRequest struct {
 
 // SendKeyResponse represents the response from sending key material
 type SendKeyResponse struct {
-	Location    string    // Location header with transaction ID
-	ExpiryTime  time.Time // Expiry time from x-expiry-time header
+	Location   string    // Location header with transaction ID
+	ExpiryTime time.Time // Expiry time from x-expiry-time header
 }
 
 // FetchKeyResponse represents the response from fetching key material
@@ -65,30 +65,30 @@ func NewClient() *Client {
 // NewClientWithTLS creates a new key server client with custom TLS configuration
 func NewClientWithTLS(serverCert *x509.Certificate, clientCert *tls.Certificate) *Client {
 	client := NewClient()
-	
+
 	// Create TLS config
 	tlsConfig := &tls.Config{
 		MinVersion: tls.VersionTLS12,
 	}
-	
+
 	// Add server certificate to trust pool if provided
 	if serverCert != nil {
 		pool := x509.NewCertPool()
 		pool.AddCert(serverCert)
 		tlsConfig.RootCAs = pool
 	}
-	
+
 	// Add client certificate if provided
 	if clientCert != nil {
 		tlsConfig.Certificates = []tls.Certificate{*clientCert}
 	}
-	
+
 	// Update HTTP client transport
 	transport := &http.Transport{
 		TLSClientConfig: tlsConfig,
 	}
 	client.httpClient.Transport = transport
-	
+
 	return client
 }
 
@@ -100,39 +100,39 @@ func (c *Client) SendKey(config KeyServerConfig, recipientKey []byte, keyMateria
 		EphemeralKeyMaterial: base64.StdEncoding.EncodeToString(keyMaterial),
 		CapsuleType:          capsuleType,
 	}
-	
+
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, internal.NewEncryptionError("failed to marshal send key request", err)
 	}
-	
+
 	// Build URL: add /key-capsules to the base URL
 	url := config.PostURL
 	if url[len(url)-1] != '/' {
 		url += "/"
 	}
 	url += "key-capsules"
-	
+
 	// Create HTTP request
 	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, internal.NewEncryptionError("failed to create HTTP request", err)
 	}
-	
+
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	// Add expiry time header if provided
 	if expiryTS > 0 {
 		req.Header.Set("x-expiry-time", time.Unix(int64(expiryTS), 0).UTC().Format(time.RFC3339))
 	}
-	
+
 	// Send request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, internal.NewEncryptionError("failed to send key to server", err)
 	}
-	defer resp.Body.Close()
-	
+	defer func() { _ = resp.Body.Close() }()
+
 	// Check status code
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
@@ -141,20 +141,20 @@ func (c *Client) SendKey(config KeyServerConfig, recipientKey []byte, keyMateria
 			nil,
 		)
 	}
-	
+
 	// Extract transaction ID from Location header
 	location := resp.Header.Get("Location")
 	if location == "" {
 		return nil, internal.NewEncryptionError("no Location header in key server response", nil)
 	}
-	
+
 	// Extract transaction ID: location is like "/key-capsules/TRANSACTION_ID"
 	// or "https://server/key-capsules/TRANSACTION_ID"
 	transactionID := extractTransactionID(location)
 	if transactionID == "" {
 		return nil, internal.NewEncryptionError(fmt.Sprintf("failed to extract transaction ID from Location: %s", location), nil)
 	}
-	
+
 	// Extract expiry time from x-expiry-time header
 	var expiryTime time.Time
 	if expiryStr := resp.Header.Get("x-expiry-time"); expiryStr != "" {
@@ -162,7 +162,7 @@ func (c *Client) SendKey(config KeyServerConfig, recipientKey []byte, keyMateria
 			expiryTime = parsedExpiry
 		}
 	}
-	
+
 	return &CapsuleInfo{
 		TransactionID: transactionID,
 		ExpiryTime:    expiryTime,
@@ -177,20 +177,20 @@ func (c *Client) FetchKey(config KeyServerConfig, transactionID string) ([]byte,
 		url += "/"
 	}
 	url += "key-capsules/" + transactionID
-	
+
 	// Create HTTP request
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, internal.NewDecryptionError("failed to create HTTP request", err)
 	}
-	
+
 	// Send request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, internal.NewDecryptionError("failed to fetch key from server", err)
 	}
-	defer resp.Body.Close()
-	
+	defer func() { _ = resp.Body.Close() }()
+
 	// Check status code
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
@@ -199,19 +199,19 @@ func (c *Client) FetchKey(config KeyServerConfig, transactionID string) ([]byte,
 			nil,
 		)
 	}
-	
+
 	// Parse JSON response
 	var fetchResp FetchKeyResponse
 	if err := json.NewDecoder(resp.Body).Decode(&fetchResp); err != nil {
 		return nil, internal.NewDecryptionError("failed to decode key server response", err)
 	}
-	
+
 	// Decode base64 key material
 	keyMaterial, err := base64.StdEncoding.DecodeString(fetchResp.EphemeralKeyMaterial)
 	if err != nil {
 		return nil, internal.NewDecryptionError("failed to decode key material", err)
 	}
-	
+
 	return keyMaterial, nil
 }
 
@@ -227,10 +227,10 @@ func extractTransactionID(location string) string {
 	if idx == -1 {
 		return ""
 	}
-	
+
 	// Extract everything after "/key-capsules/"
 	transactionID := location[idx+len(prefix):]
-	
+
 	// Remove any trailing path components or query parameters
 	if slashIdx := strings.Index(transactionID, "/"); slashIdx != -1 {
 		transactionID = transactionID[:slashIdx]
@@ -238,7 +238,6 @@ func extractTransactionID(location string) string {
 	if queryIdx := strings.Index(transactionID, "?"); queryIdx != -1 {
 		transactionID = transactionID[:queryIdx]
 	}
-	
+
 	return transactionID
 }
-

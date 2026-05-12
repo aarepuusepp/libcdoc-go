@@ -309,7 +309,10 @@ func (w *Writer) buildHeaderData() ([]byte, error) {
 						keySize := 48 // secp384r1 coordinate size
 						recipientPubKeyTLS13 = make([]byte, 1+keySize*2)
 						recipientPubKeyTLS13[0] = 0x04 // Uncompressed point format
+						// CDOC2 key-server KDF uses the TLS 1.3 uncompressed EC point bytes.
+						//nolint:staticcheck
 						xBytes := ecdsaPub.X.Bytes()
+						//nolint:staticcheck
 						yBytes := ecdsaPub.Y.Bytes()
 						copy(recipientPubKeyTLS13[1+keySize-len(xBytes):1+keySize], xBytes)
 						copy(recipientPubKeyTLS13[1+keySize*2-len(yBytes):1+keySize*2], yBytes)

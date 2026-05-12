@@ -28,10 +28,10 @@ func createTestRSAPrivateKey(t *testing.T) (*rsa.PrivateKey, *x509.Certificate) 
 		Subject: pkix.Name{
 			CommonName: "Test RSA User",
 		},
-		NotBefore:         time.Now(),
-		NotAfter:          time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:          x509.KeyUsageKeyEncipherment,
-		PublicKey:         privKey.Public(),
+		NotBefore:          time.Now(),
+		NotAfter:           time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:           x509.KeyUsageKeyEncipherment,
+		PublicKey:          privKey.Public(),
 		PublicKeyAlgorithm: x509.RSA,
 	}
 
@@ -60,10 +60,10 @@ func createTestECPrivateKey(t *testing.T) (*ecdsa.PrivateKey, *x509.Certificate)
 		Subject: pkix.Name{
 			CommonName: "Test EC User",
 		},
-		NotBefore:         time.Now(),
-		NotAfter:          time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:          x509.KeyUsageKeyAgreement,
-		PublicKey:         privKey.Public(),
+		NotBefore:          time.Now(),
+		NotAfter:           time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:           x509.KeyUsageKeyAgreement,
+		PublicKey:          privKey.Public(),
 		PublicKeyAlgorithm: x509.ECDSA,
 	}
 
@@ -249,8 +249,12 @@ func TestDecrypter_MultipleRecipients(t *testing.T) {
 	builder.Version(Version11)
 	builder.WithDataFile(testFileName, strings.NewReader(testContent), int64(len(testContent)))
 
-	builder.WithRecipientCertificate(cert1)
-	builder.WithRecipientCertificate(cert2)
+	if err := builder.WithRecipientCertificate(cert1); err != nil {
+		t.Fatalf("WithRecipientCertificate(cert1) failed: %v", err)
+	}
+	if err := builder.WithRecipientCertificate(cert2); err != nil {
+		t.Fatalf("WithRecipientCertificate(cert2) failed: %v", err)
+	}
 
 	var encryptedOutput bytes.Buffer
 	if err := builder.BuildToWriter(&encryptedOutput); err != nil {
@@ -362,4 +366,3 @@ func TestDecrypter_LargeContent(t *testing.T) {
 		t.Error("Large content decryption failed")
 	}
 }
-

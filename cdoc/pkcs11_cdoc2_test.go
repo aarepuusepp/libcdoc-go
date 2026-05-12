@@ -6,17 +6,11 @@ package cdoc
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/hex"
-	"math/big"
 	"os"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/aarepuusepp/libcdoc-go/v2/key"
 )
@@ -262,50 +256,3 @@ func TestCDOC2_PKCS11_ECC(t *testing.T) {
 		t.Errorf("Expected filename 'test.txt', got '%s'", files[0].Name)
 	}
 }
-
-// generateSelfSignedCertForPKCS11 generates a test certificate for PKCS#11 testing
-// This is a helper function that can be used when testing with software tokens
-func generateSelfSignedCertForPKCS11(t *testing.T, keyType string) (*x509.Certificate, interface{}) {
-	t.Helper()
-
-	var priv interface{}
-	var err error
-	var publicKey interface{}
-
-	if keyType == "RSA" {
-		priv, err = rsa.GenerateKey(rand.Reader, 2048)
-		if err != nil {
-			t.Fatalf("Failed to generate RSA key: %v", err)
-		}
-		publicKey = &priv.(*rsa.PrivateKey).PublicKey
-	} else if keyType == "ECC" {
-		priv, err = ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
-		if err != nil {
-			t.Fatalf("Failed to generate ECC key: %v", err)
-		}
-		publicKey = &priv.(*ecdsa.PrivateKey).PublicKey
-	} else {
-		t.Fatalf("Unsupported key type: %s", keyType)
-	}
-
-	tmpl := x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		Subject:      pkix.Name{CommonName: "Test PKCS#11 Certificate"},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(24 * time.Hour),
-		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-	}
-
-	der, err := x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, publicKey, priv)
-	if err != nil {
-		t.Fatalf("Failed to create certificate: %v", err)
-	}
-
-	cert, err := x509.ParseCertificate(der)
-	if err != nil {
-		t.Fatalf("Failed to parse certificate: %v", err)
-	}
-
-	return cert, priv
-}
-

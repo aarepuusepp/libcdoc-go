@@ -147,15 +147,9 @@ func (p *Parser) parseECRecipient(encryptedKey *xmlenc.EncryptedKey) (*xmlenc.EC
 	partyVInfoHex := params.PartyVInfo
 
 	// Remove "00" prefix if present
-	if strings.HasPrefix(algorithmIDHex, "00") {
-		algorithmIDHex = algorithmIDHex[2:]
-	}
-	if strings.HasPrefix(partyUInfoHex, "00") {
-		partyUInfoHex = partyUInfoHex[2:]
-	}
-	if strings.HasPrefix(partyVInfoHex, "00") {
-		partyVInfoHex = partyVInfoHex[2:]
-	}
+	algorithmIDHex = strings.TrimPrefix(algorithmIDHex, "00")
+	partyUInfoHex = strings.TrimPrefix(partyUInfoHex, "00")
+	partyVInfoHex = strings.TrimPrefix(partyVInfoHex, "00")
 
 	algorithmID, err := internal.DecodeHex(algorithmIDHex)
 	if err != nil {
@@ -286,7 +280,8 @@ func (p *Parser) parseECPublicKey(base64PublicKey string, namedCurveURI string) 
 	x := new(big.Int).SetBytes(xBytes)
 	y := new(big.Int).SetBytes(yBytes)
 
-	// Validate point is on curve
+	// Validate point is on curve.
+	//nolint:staticcheck // CDOC XMLENC stores legacy EC coordinates that are validated here.
 	if !curve.IsOnCurve(x, y) {
 		return nil, internal.NewParseError("EC point is not on curve", nil)
 	}

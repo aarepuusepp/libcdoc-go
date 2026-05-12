@@ -18,7 +18,7 @@ const (
 	// SecP256R1OID is the OID for secp256r1 (aka prime256v1) curve
 	SecP256R1OID = "1.2.840.10045.3.1.7"
 	// SecP384R1OID is the OID for secp384r1 curve
-	SecP384R1OID = "1.3.132.0.34"
+	SecP384R1OID    = "1.3.132.0.34"
 	DigestSHA256URI = "http://www.w3.org/2001/04/xmlenc#sha256"
 	DigestSHA384URI = "http://www.w3.org/2001/04/xmlenc#sha384"
 	DigestSHA512URI = "http://www.w3.org/2001/04/xmlenc#sha512"
@@ -80,6 +80,8 @@ func GenerateECKeyPair(publicKey *ecdsa.PublicKey) (*ecdsa.PrivateKey, error) {
 }
 
 // ECDHKeyAgreement performs ECDH key agreement and returns the shared secret
+//
+//nolint:staticcheck // CDOC XMLENC requires legacy P-curve ECDH over ecdsa/elliptic keys.
 func ECDHKeyAgreement(privKey *ecdsa.PrivateKey, pubKey *ecdsa.PublicKey) ([]byte, error) {
 	if privKey.Curve != pubKey.Curve {
 		return nil, internal.NewEncryptionError(
@@ -173,6 +175,8 @@ func hashFromDigestURI(digestURI string) (func() hash.Hash, error) {
 }
 
 // ValidateECPoint validates that an EC point is on the given curve
+//
+//nolint:staticcheck // CDOC parses legacy EC coordinates and must validate them against elliptic.Curve.
 func ValidateECPoint(x, y *big.Int, curve elliptic.Curve) bool {
 	if x == nil || y == nil {
 		return false
@@ -208,6 +212,8 @@ func ExtractECPublicKeyFromCertificate(cert *x509.Certificate) (*ecdsa.PublicKey
 }
 
 // ValidateECPublicKey validates an EC public key point
+//
+//nolint:staticcheck // CDOC certificate handling still uses the legacy ecdsa.PublicKey coordinate model.
 func ValidateECPublicKey(pubKey *ecdsa.PublicKey) error {
 	if !ValidateECPoint(pubKey.X, pubKey.Y, pubKey.Curve) {
 		return internal.NewCertificateError(
@@ -217,7 +223,7 @@ func ValidateECPublicKey(pubKey *ecdsa.PublicKey) error {
 	}
 
 	// Additional validation: check coordinates are in valid range
-	params := pubKey.Curve.Params()
+	params := pubKey.Params()
 	if pubKey.X.Cmp(params.P) >= 0 || pubKey.Y.Cmp(params.P) >= 0 {
 		return internal.NewCertificateError(
 			"EC public key coordinates out of range",

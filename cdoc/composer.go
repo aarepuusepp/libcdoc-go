@@ -425,6 +425,8 @@ func (c *Composer) createECEncryptedKey(recipientCert *x509.Certificate, cn stri
 
 // encodeECPublicKeyBytes encodes EC public key as an uncompressed EC point:
 // 0x04 || X || Y (RFC 5480 / SEC1).
+//
+//nolint:staticcheck // CDOC XMLENC uses the legacy ecdsa.PublicKey coordinate representation.
 func encodeECPublicKeyBytes(pubKey ecdsa.PublicKey) ([]byte, error) {
 	if pubKey.Curve == nil || pubKey.X == nil || pubKey.Y == nil {
 		return nil, fmt.Errorf("encode EC public key: missing curve or coordinates")

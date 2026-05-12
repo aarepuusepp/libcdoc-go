@@ -7,8 +7,8 @@ import (
 	"crypto/ecdsa"
 	"crypto/x509"
 
-	"github.com/miekg/pkcs11"
 	"github.com/aarepuusepp/libcdoc-go/v2/cert"
+	"github.com/miekg/pkcs11"
 )
 
 // PKCS11Context wraps PKCS#11 operations
@@ -38,17 +38,17 @@ func NewPKCS11Context(config PKCS11Config) (*PKCS11Context, error) {
 	// Find slot
 	slots, err := ctx.GetSlotList(true) // true = only slots with tokens
 	if err != nil {
-		ctx.Finalize()
+		_ = ctx.Finalize()
 		return nil, NewPKCS11Error("failed to get slot list", err)
 	}
 
 	if len(slots) == 0 {
-		ctx.Finalize()
+		_ = ctx.Finalize()
 		return nil, NewPKCS11Error("no slots with tokens found", nil)
 	}
 
 	// Use configured slot or first available
-	slot := uint(config.Slot)
+	var slot uint
 	if config.Slot >= len(slots) {
 		slot = slots[0]
 	} else {
@@ -58,15 +58,15 @@ func NewPKCS11Context(config PKCS11Config) (*PKCS11Context, error) {
 	// Open session
 	session, err := ctx.OpenSession(slot, pkcs11.CKF_SERIAL_SESSION|pkcs11.CKF_RW_SESSION)
 	if err != nil {
-		ctx.Finalize()
+		_ = ctx.Finalize()
 		return nil, NewPKCS11Error("failed to open PKCS#11 session", err)
 	}
 
 	// Login
 	err = ctx.Login(session, pkcs11.CKU_USER, config.PIN)
 	if err != nil {
-		ctx.CloseSession(session)
-		ctx.Finalize()
+		_ = ctx.CloseSession(session)
+		_ = ctx.Finalize()
 		return nil, NewPKCS11Error("failed to login to PKCS#11 token", err)
 	}
 
@@ -133,12 +133,14 @@ func (c *PKCS11Context) FindPrivateKey(label string, keyID []byte) (pkcs11.Objec
 	if err != nil {
 		return 0, NewPKCS11Error("failed to initialize key search", err)
 	}
-	defer c.ctx.FindObjectsFinal(c.session)
-
 	// Get first matching key
 	objects, _, err := c.ctx.FindObjects(c.session, 1)
+	finalErr := c.ctx.FindObjectsFinal(c.session)
 	if err != nil {
 		return 0, NewPKCS11Error("failed to find private key", err)
+	}
+	if finalErr != nil {
+		return 0, NewPKCS11Error("failed to finalize private key search", finalErr)
 	}
 
 	if len(objects) == 0 {
@@ -170,12 +172,14 @@ func (c *PKCS11Context) FindCertificate(label string, keyID []byte) (*x509.Certi
 	if err != nil {
 		return nil, NewPKCS11Error("failed to initialize certificate search", err)
 	}
-	defer c.ctx.FindObjectsFinal(c.session)
-
 	// Get first matching certificate
 	objects, _, err := c.ctx.FindObjects(c.session, 1)
+	finalErr := c.ctx.FindObjectsFinal(c.session)
 	if err != nil {
 		return nil, NewPKCS11Error("failed to find certificate", err)
+	}
+	if finalErr != nil {
+		return nil, NewPKCS11Error("failed to finalize certificate search", finalErr)
 	}
 
 	if len(objects) == 0 {
@@ -271,4 +275,3 @@ func (c *PKCS11Context) DecryptEC(keyHandle pkcs11.ObjectHandle, ephemeralPublic
 		nil,
 	)
 }
-

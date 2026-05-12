@@ -27,10 +27,10 @@ func createTestPKCS12(t *testing.T, password string) []byte {
 		Subject: pkix.Name{
 			CommonName: "Test User",
 		},
-		NotBefore:    time.Now(),
-		NotAfter:     time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
 	}
 
@@ -46,7 +46,7 @@ func createTestPKCS12(t *testing.T, password string) []byte {
 	}
 
 	// Create PKCS#12 keystore
-	p12Data, err := pkcs12.Encode(rand.Reader, privKey, cert, nil, password)
+	p12Data, err := pkcs12.LegacyRC2.WithRand(rand.Reader).Encode(privKey, cert, nil, password)
 	if err != nil {
 		t.Fatalf("Failed to create PKCS#12 keystore: %v", err)
 	}
@@ -112,7 +112,7 @@ func createTestPKCS12WithChain(t *testing.T, password string) []byte {
 	}
 
 	// Create PKCS#12 keystore with a CA chain entry included
-	p12Data, err := pkcs12.Encode(rand.Reader, privKey, leafCert, []*x509.Certificate{caCert}, password)
+	p12Data, err := pkcs12.LegacyRC2.WithRand(rand.Reader).Encode(privKey, leafCert, []*x509.Certificate{caCert}, password)
 	if err != nil {
 		t.Fatalf("Failed to create PKCS#12 keystore with chain: %v", err)
 	}
@@ -213,4 +213,3 @@ func TestParsePKCS12_InvalidData(t *testing.T) {
 		t.Errorf("Expected CertificateError, got %T", err)
 	}
 }
-
