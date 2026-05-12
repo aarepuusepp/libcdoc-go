@@ -21,15 +21,16 @@ func ParsePKCS12(p12Data []byte, password string, alias ...string) (*PKCS12KeyEn
 		return nil, internal.NewCertificateError("PKCS#12 data is empty", nil)
 	}
 
-	// Parse PKCS#12 data using software.sslmate.com/src/go-pkcs12
-	// This package supports parsing with password
-	privateKey, certificate, err := pkcs12.Decode(p12Data, password)
+	// Parse PKCS#12 data using software.sslmate.com/src/go-pkcs12.
+	// Use DecodeChain to support keystores that include a CA chain in addition to
+	// the leaf certificate and private key.
+	privateKey, certificate, _, err := pkcs12.DecodeChain(p12Data, password)
 	if err != nil {
 		return nil, internal.NewCertificateError("failed to decode PKCS#12 keystore", err)
 	}
 
 	// Note: For alias support, we'd need to decode all entries and find by alias
-	// The software.sslmate.com/pkgcs12.Decode extracts the first private key and certificate
+	// The software.sslmate.com/src/go-pkcs12.DecodeChain extracts the first private key and the leaf certificate
 	// If alias is provided, we should find matching entry, but for MVP we support auto-select
 	// This matches cdoc4j's pattern where it auto-selects first valid key if no alias given
 
