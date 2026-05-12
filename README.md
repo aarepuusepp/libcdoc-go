@@ -4,7 +4,7 @@
 
 Go library for Estonian CDOC encryption/decryption supporting CDOC 1.0, 1.1, and 2.0 formats.
 
-**Version:** 2.0.0
+**Version:** 2.0.4
 
 ## Features
 
@@ -31,10 +31,80 @@ Go library for Estonian CDOC encryption/decryption supporting CDOC 1.0, 1.1, and
 
 ## Installation
 
-### From Public Repository (when published)
+### From Public Repository
 
 ```bash
-go get github.com/aarepuusepp/libcdoc-go/v2
+go get github.com/aarepuusepp/libcdoc-go/v2@v2.0.4
+```
+
+For backend builds that should resolve the library from the public Go module
+proxy, do not use a local `replace` directive. The consuming module should have
+only a normal requirement:
+
+```go
+require github.com/aarepuusepp/libcdoc-go/v2 v2.0.4
+```
+
+Then run:
+
+```bash
+go mod tidy
+go mod download github.com/aarepuusepp/libcdoc-go/v2@v2.0.4
+```
+
+## Publishing a New Version to the Public Go Proxy
+
+The module path is `github.com/aarepuusepp/libcdoc-go/v2`, so every public
+release must be available from a public Git repository at
+`https://github.com/aarepuusepp/libcdoc-go` and must use a semantic version tag
+that starts with `v2.`.
+
+1. Ensure the GitHub repository is public:
+
+```bash
+git ls-remote https://github.com/aarepuusepp/libcdoc-go.git refs/heads/main
+```
+
+This command must work without credentials. If it asks for authentication, make
+the GitHub repository public before publishing the version.
+
+2. Commit the release changes:
+
+```bash
+git status --short
+git add README.md go.mod go.sum cdoc crypto key cert internal xmlenc
+git commit -m "Release v2.0.4"
+```
+
+3. Create and push the `v2` semantic version tag:
+
+```bash
+git tag -a v2.0.4 -m "v2.0.4"
+git push github main
+git push github v2.0.4
+```
+
+4. Warm and verify the public Go proxy:
+
+```bash
+GOPROXY=https://proxy.golang.org GONOPROXY= GONOSUMDB= \
+  go mod download github.com/aarepuusepp/libcdoc-go/v2@v2.0.4
+```
+
+The proxy metadata should also be reachable directly:
+
+```text
+https://proxy.golang.org/github.com/aarepuusepp/libcdoc-go/v2/@v/v2.0.4.info
+```
+
+5. Update consumers, for example `digisign-encrypt-go`, by removing any local
+`replace github.com/aarepuusepp/libcdoc-go/v2 => ...` directive and requiring
+the published version:
+
+```bash
+go get github.com/aarepuusepp/libcdoc-go/v2@v2.0.4
+go mod tidy
+go test ./...
 ```
 
 ### Using Locally Without Publishing
@@ -57,7 +127,7 @@ go mod init my-app
 
 2. Add to your `go.mod`:
 ```go
-require github.com/aarepuusepp/libcdoc-go/v2 v2.0.0
+require github.com/aarepuusepp/libcdoc-go/v2 v2.0.4
 replace github.com/aarepuusepp/libcdoc-go/v2 => C:\path\to\libcdoc-go
 ```
 
