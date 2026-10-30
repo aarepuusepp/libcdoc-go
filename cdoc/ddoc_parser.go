@@ -9,9 +9,9 @@ import (
 
 // DDOCSignedDoc represents the root element of a DDOC structure
 type DDOCSignedDoc struct {
-	XMLName   xml.Name      `xml:"SignedDoc"`
-	Format    string        `xml:"format,attr"`
-	Version   string        `xml:"version,attr"`
+	XMLName   xml.Name       `xml:"SignedDoc"`
+	Format    string         `xml:"format,attr"`
+	Version   string         `xml:"version,attr"`
 	DataFiles []DDOCDataFile `xml:"DataFile"`
 }
 
@@ -51,4 +51,3 @@ func ParseDDOC(data []byte) ([]DecryptedFile, error) {
 
 	return files, nil
 }
-

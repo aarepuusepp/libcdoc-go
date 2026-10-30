@@ -8,4 +8,3 @@ import (
 func NewPKCS11Error(message string, cause error) error {
 	return internal.NewPKCS11Error(message, cause)
 }
-

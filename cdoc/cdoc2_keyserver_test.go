@@ -13,8 +13,18 @@ import (
 	"time"
 
 	c2keyserver "github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2/keyserver"
+	"github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2/riahttp"
 	"github.com/aarepuusepp/libcdoc-go/v2/key"
 )
+
+func setupKeyServerMock(t *testing.T) (*c2keyserver.MockServer, *c2keyserver.Client) {
+	t.Helper()
+	riahttp.DevModePrivateHosts = true
+	t.Cleanup(func() { riahttp.DevModePrivateHosts = false })
+	mockServer := c2keyserver.NewMockServer()
+	t.Cleanup(mockServer.Stop)
+	return mockServer, c2keyserver.NewTestClient(mockServer)
+}
 
 func generateSelfSignedRSA_KS(t *testing.T) (*x509.Certificate, *key.PrivateKey) {
 	t.Helper()
@@ -41,8 +51,12 @@ func generateSelfSignedRSA_KS(t *testing.T) (*x509.Certificate, *key.PrivateKey)
 }
 
 func generateSelfSignedECC_KS(t *testing.T) (*x509.Certificate, *key.PrivateKey) {
+	return generateSelfSignedECC_KS_Curve(t, elliptic.P384())
+}
+
+func generateSelfSignedECC_KS_Curve(t *testing.T, curve elliptic.Curve) (*x509.Certificate, *key.PrivateKey) {
 	t.Helper()
-	priv, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	priv, err := ecdsa.GenerateKey(curve, rand.Reader)
 	if err != nil {
 		t.Fatalf("gen ecc: %v", err)
 	}
@@ -64,16 +78,112 @@ func generateSelfSignedECC_KS(t *testing.T) (*x509.Certificate, *key.PrivateKey)
 	return cert, &key.PrivateKey{Key: priv}
 }
 
+func roundTripKeyServer(t *testing.T, cert *x509.Certificate, priv *key.PrivateKey, serverID string, data []byte) {
+	t.Helper()
+	mockServer, client := setupKeyServerMock(t)
+	baseURL := mockServer.URL()
+	config := c2keyserver.KeyServerConfig{
+		ServerID: serverID,
+		PostURL:  baseURL,
+		FetchURL: baseURL,
+	}
+	var out bytes.Buffer
+	b := NewBuilder().Version(Version20)
+	b.SetKeyServerClient(client)
+	b.AddKeyServerConfig(config)
+	if err := b.WithKeyServerRecipient(cert, serverID, "test-label", 0); err != nil {
+		t.Fatalf("with key server recipient: %v", err)
+	}
+	b.WithDataFile("greeting.txt", bytes.NewReader(data), int64(len(data)))
+	if err := b.BuildToWriter(&out); err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	d := NewDecrypter()
+	d.SetKeyServerClient(client)
+	d.AddKeyServerConfig(config)
+	d.WithCDOC(bytes.NewReader(out.Bytes()))
+	d.WithPrivateKey(priv)
+	files, err := d.Decrypt()
+	if err != nil {
+		t.Fatalf("decrypt: %v", err)
+	}
+	if len(files) != 1 || !bytes.Equal(files[0].Content, data) {
+		t.Fatalf("unexpected decrypt result")
+	}
+}
+
+func TestCDOC2_RoundTrip_KeyServer_ECC_P256(t *testing.T) {
+	cert, priv := generateSelfSignedECC_KS_Curve(t, elliptic.P256())
+	roundTripKeyServer(t, cert, priv, "test-server-ecc-p256", []byte("hello-p256"))
+}
+
+func TestCDOC2_RoundTrip_KeyServer_ECC_P521(t *testing.T) {
+	cert, priv := generateSelfSignedECC_KS_Curve(t, elliptic.P521())
+	roundTripKeyServer(t, cert, priv, "test-server-ecc-p521", []byte("hello-p521"))
+}
+
+func TestCDOC2_KeyServer_Mixed_RSA_ECC(t *testing.T) {
+	certRSA, privRSA := generateSelfSignedRSA_KS(t)
+	certECC, privECC := generateSelfSignedECC_KS_Curve(t, elliptic.P256())
+
+	mockServer, client := setupKeyServerMock(t)
+	baseURL := mockServer.URL()
+	serverID := "test-server-mixed"
+	config := c2keyserver.KeyServerConfig{
+		ServerID: serverID,
+		PostURL:  baseURL,
+		FetchURL: baseURL,
+	}
+
+	var out bytes.Buffer
+	b := NewBuilder().Version(Version20)
+	b.SetKeyServerClient(client)
+	b.AddKeyServerConfig(config)
+	if err := b.WithKeyServerRecipient(certRSA, serverID, "rsa-recipient", 0); err != nil {
+		t.Fatalf("rsa recipient: %v", err)
+	}
+	if err := b.WithKeyServerRecipient(certECC, serverID, "ecc-recipient", 0); err != nil {
+		t.Fatalf("ecc recipient: %v", err)
+	}
+	data := []byte("hello-mixed-rsa-ecc")
+	b.WithDataFile("greeting.txt", bytes.NewReader(data), int64(len(data)))
+	if err := b.BuildToWriter(&out); err != nil {
+		t.Fatalf("build: %v", err)
+	}
+
+	type recipientCase struct {
+		name string
+		priv *key.PrivateKey
+		cert *x509.Certificate
+	}
+	for _, tc := range []recipientCase{
+		{"rsa", privRSA, certRSA},
+		{"ecc", privECC, certECC},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := NewDecrypter()
+			d.SetKeyServerClient(client)
+			d.AddKeyServerConfig(config)
+			d.WithCDOC(bytes.NewReader(out.Bytes()))
+			d.WithPrivateKey(tc.priv)
+			d.WithCertificate(tc.cert)
+			files, err := d.Decrypt()
+			if err != nil {
+				t.Fatalf("decrypt: %v", err)
+			}
+			if len(files) != 1 || !bytes.Equal(files[0].Content, data) {
+				t.Fatal("content mismatch")
+			}
+		})
+	}
+}
+
 func TestCDOC2_RoundTrip_KeyServer_RSA(t *testing.T) {
 	cert, priv := generateSelfSignedRSA_KS(t)
 
 	// Start mock key server
-	mockServer := c2keyserver.NewMockServer()
-	defer mockServer.Stop()
+	mockServer, client := setupKeyServerMock(t)
 	baseURL := mockServer.URL()
-
-	// Create key server client
-	client := c2keyserver.NewClient()
 
 	// Create key server config
 	serverID := "test-server-rsa"
@@ -133,12 +243,8 @@ func TestCDOC2_RoundTrip_KeyServer_ECC(t *testing.T) {
 	cert, priv := generateSelfSignedECC_KS(t)
 
 	// Start mock key server
-	mockServer := c2keyserver.NewMockServer()
-	defer mockServer.Stop()
+	mockServer, client := setupKeyServerMock(t)
 	baseURL := mockServer.URL()
-
-	// Create key server client
-	client := c2keyserver.NewClient()
 
 	// Create key server config
 	serverID := "test-server-ecc"
@@ -190,11 +296,9 @@ func TestCDOC2_RoundTrip_KeyServer_ECC(t *testing.T) {
 func TestCDOC2_KeyServer_ExpiryTime(t *testing.T) {
 	cert, priv := generateSelfSignedRSA_KS(t)
 
-	mockServer := c2keyserver.NewMockServer()
-	defer mockServer.Stop()
+	mockServer, client := setupKeyServerMock(t)
 	baseURL := mockServer.URL()
 
-	client := c2keyserver.NewClient()
 	serverID := "test-server-expiry"
 	config := c2keyserver.KeyServerConfig{
 		ServerID: serverID,
@@ -242,11 +346,9 @@ func TestCDOC2_KeyServer_MultipleRecipients(t *testing.T) {
 	cert1, priv1 := generateSelfSignedRSA_KS(t)
 	cert2, priv2 := generateSelfSignedRSA_KS(t)
 
-	mockServer := c2keyserver.NewMockServer()
-	defer mockServer.Stop()
+	mockServer, client := setupKeyServerMock(t)
 	baseURL := mockServer.URL()
 
-	client := c2keyserver.NewClient()
 	serverID := "test-server-multi"
 	config := c2keyserver.KeyServerConfig{
 		ServerID: serverID,
@@ -308,4 +410,3 @@ func TestCDOC2_KeyServer_MultipleRecipients(t *testing.T) {
 		t.Error("decryption with key server recipient failed")
 	}
 }
-

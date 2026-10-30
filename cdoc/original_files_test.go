@@ -74,4 +74,3 @@ func TestParser_GetOriginalFiles_NotParsed_ReturnsError(t *testing.T) {
 		t.Fatalf("expected error, got nil")
 	}
 }
-

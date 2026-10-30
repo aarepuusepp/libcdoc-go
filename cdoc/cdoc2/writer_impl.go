@@ -59,7 +59,7 @@ func (w *Writer) WriteEncryptedData(files []DataFile) error {
 		return err
 	}
 	headerHMAC := computeHMACSHA256(w.headerData, hmacKey)
-	
+
 	aad := []byte(PAYLOAD)
 	aad = append(aad, w.headerData...)
 	aad = append(aad, headerHMAC...)
@@ -135,4 +135,3 @@ type DataFile struct {
 	Size     int64
 	MimeType string
 }
-

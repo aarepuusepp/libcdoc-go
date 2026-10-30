@@ -82,9 +82,11 @@ func PrepareClientUnwrap(cdocBytes []byte, recipientCert *x509.Certificate) (*Cl
 		challenge.PartyVInfoB64 = base64.StdEncoding.EncodeToString(r.GetPartyVInfo())
 		ephemeralKey := r.GetEphemeralPublicKey()
 		if ephemeralKey != nil {
-			challenge.EphemeralPublicKeyB64 = base64.StdEncoding.EncodeToString(
-				elliptic.Marshal(ephemeralKey.Curve, ephemeralKey.X, ephemeralKey.Y),
-			)
+			point, err := ephemeralKey.Bytes()
+			if err != nil {
+				return nil, internal.NewDecryptionError("invalid ephemeral public key", err)
+			}
+			challenge.EphemeralPublicKeyB64 = base64.StdEncoding.EncodeToString(point)
 		}
 		wrappedKey, err := r.GetEncryptedKey()
 		if err != nil {
@@ -167,11 +169,11 @@ func DecodeEphemeralPublicKey(curve elliptic.Curve, point []byte) (*ecdsa.Public
 	if len(point) == 0 {
 		return nil, internal.NewDecryptionError("ephemeral public key is empty", nil)
 	}
-	x, y := elliptic.Unmarshal(curve, point)
-	if x == nil {
+	public, err := ecdsa.ParseUncompressedPublicKey(curve, point)
+	if err != nil {
 		return nil, internal.NewDecryptionError("invalid ephemeral public key encoding", nil)
 	}
-	return &ecdsa.PublicKey{Curve: curve, X: x, Y: y}, nil
+	return public, nil
 }
 
 // ChallengeEncryptedKey returns RSA encrypted key bytes from the challenge.

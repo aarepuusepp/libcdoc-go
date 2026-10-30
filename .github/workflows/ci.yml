@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.22', '1.23']
+        go-version: ['1.27.3']
 
     steps:
     - uses: actions/checkout@v4
@@ -52,12 +52,12 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.23'
+        go-version-file: go.mod
 
     - name: golangci-lint
-      uses: golangci/golangci-lint-action@v3
+      uses: golangci/golangci-lint-action@v9
       with:
-        version: latest
+        version: v2.15.0
 
   fuzz:
     runs-on: ubuntu-latest
@@ -67,10 +67,9 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.23'
+        go-version-file: go.mod
 
     - name: Run fuzzing
       run: |
-        go test -fuzz=FuzzXMLParser -fuzztime=10s ./...
-        go test -fuzz=FuzzCertificateParser -fuzztime=10s ./...
+        go test -fuzz=FuzzValidateBaseURL -fuzztime=10s ./cdoc/cdoc2/riahttp/...
 

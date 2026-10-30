@@ -37,4 +37,3 @@ func TestParsePrivateKey_Invalid(t *testing.T) {
 
 // Note: Full key parsing tests would require actual test keys from cdoc4j resources
 // These are basic validation tests. Integration tests will use real key files.
-

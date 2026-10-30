@@ -47,4 +47,3 @@ func ParsePKCS12(p12Data []byte, password string, alias ...string) (*PKCS12KeyEn
 		Certificate: certificate,
 	}, nil
 }
-

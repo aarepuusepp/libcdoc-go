@@ -1,15 +1,12 @@
 module github.com/aarepuusepp/libcdoc-go/v2
 
-go 1.26.3
+go 1.27.3
 
 require (
+	github.com/google/flatbuffers v25.12.19+incompatible
 	github.com/miekg/pkcs11 v1.1.2
-	software.sslmate.com/src/go-pkcs12 v0.7.1
+	golang.org/x/crypto v0.58.0
+	software.sslmate.com/src/go-pkcs12 v0.7.4
 )
 
-require github.com/google/flatbuffers v25.12.19+incompatible
-
-require (
-	golang.org/x/crypto v0.51.0
-	golang.org/x/sys v0.44.0 // indirect
-)
+require golang.org/x/sys v0.49.0 // indirect

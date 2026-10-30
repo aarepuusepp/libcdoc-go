@@ -1,8 +1,10 @@
-# PKCS#11 EC Support Limitation - Technical Explanation
+# PKCS#11 EC Support - Technical Notes
 
 ## Overview
 
-The PKCS#11 implementation in `cdoc1-go` currently **fully supports RSA decryption** but has **limited EC (Elliptic Curve) support**. This document explains the technical reasons why EC decryption via PKCS#11 is challenging and requires token-specific implementation.
+The PKCS#11 implementation supports RSA decryption and EC shared-secret derivation for CDOC decryption. EC support uses the standard `CKM_ECDH1_DERIVE` mechanism with `CKD_NULL`, then performs the CDOC ConcatKDF/AES-KW or CDOC2 HKDF steps in software.
+
+Token compatibility note: the derived generic secret must be readable through `CKA_VALUE`. Some PKCS#11 modules allow this for a session object created with `CKA_SENSITIVE=false` and `CKA_EXTRACTABLE=true`; stricter modules may reject this and need a token-specific path that performs more of the KDF/unwrap operation inside the token.
 
 ## How CDOC EC Decryption Works (Software Implementation)
 

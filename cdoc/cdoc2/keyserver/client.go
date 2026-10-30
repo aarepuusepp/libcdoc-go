@@ -1,243 +1,297 @@
 package keyserver
 
 import (
-	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
+	"github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2/bounds"
+	"github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2/riahttp"
 	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 )
 
-// Client handles communication with CDOC2 key servers
+// Client performs key-capsule POST and GET with independent HTTP stacks when configured.
 type Client struct {
-	httpClient *http.Client
+	postHTTP         *riahttp.Client
+	fetchHTTP        *riahttp.Client
+	onCapsuleCreated func(CapsuleInfo)
 }
 
-// KeyServerConfig holds configuration for a key server
+// WithOnCapsuleCreated returns a copy that invokes fn after each successful POST /key-capsules.
+func (c *Client) WithOnCapsuleCreated(fn func(CapsuleInfo)) *Client {
+	if c == nil {
+		return nil
+	}
+	clone := *c
+	clone.onCapsuleCreated = fn
+	return &clone
+}
+
+// postClient returns the HTTP client used for POST /key-capsules.
+func (c *Client) postClient() *riahttp.Client {
+	if c == nil {
+		return nil
+	}
+	if c.postHTTP != nil {
+		return c.postHTTP
+	}
+	return c.fetchHTTP
+}
+
+// fetchClient returns the HTTP client used for GET /key-capsules/{id} (recipient mTLS).
+func (c *Client) fetchClient() *riahttp.Client {
+	if c == nil {
+		return nil
+	}
+	if c.fetchHTTP != nil {
+		return c.fetchHTTP
+	}
+	return c.postHTTP
+}
+
+// NewClient creates a key server client with default TLS 1.3 transport for POST and GET.
+func NewClient() *Client {
+	h := riahttp.NewClient(riahttp.Config{})
+	return &Client{postHTTP: h, fetchHTTP: h}
+}
+
+// KeyServerConfig holds configuration for a key server.
 type KeyServerConfig struct {
-	ServerID   string            // UUID of the key server
-	PostURL    string            // POST URL for sending key material (e.g., https://cdoc2.id.ee:8443)
-	FetchURL   string            // GET URL for fetching key material (e.g., https://cdoc2.id.ee:8444)
-	TLSCert    *x509.Certificate // Optional TLS certificate for server verification
-	ClientCert *tls.Certificate  // Optional client TLS certificate for authentication
+	ServerID   string
+	PostURL    string
+	FetchURL   string
+	TLSCert    *x509.Certificate
+	ClientCert *tls.Certificate
+	postBase   *url.URL
+	fetchBase  *url.URL
 }
 
-// CapsuleInfo contains information returned from sending key material to server
+// CapsuleInfo contains information returned from POST /key-capsules.
 type CapsuleInfo struct {
-	TransactionID string    // Transaction ID from Location header
-	ExpiryTime    time.Time // Expiry time from x-expiry-time header
+	TransactionID  string
+	ExpiryTime     time.Time
+	ExpiryAdjusted bool
+	CapsuleType    string
 }
 
-// SendKeyRequest is the JSON request body for sending key material
+// SendKeyRequest is the JSON request body for sending key material.
 type SendKeyRequest struct {
 	RecipientID          string `json:"recipient_id"`
 	EphemeralKeyMaterial string `json:"ephemeral_key_material"`
 	CapsuleType          string `json:"capsule_type"`
 }
 
-// SendKeyResponse represents the response from sending key material
-type SendKeyResponse struct {
-	Location   string    // Location header with transaction ID
-	ExpiryTime time.Time // Expiry time from x-expiry-time header
-}
-
-// FetchKeyResponse represents the response from fetching key material
+// FetchKeyResponse represents GET /key-capsules/{id} JSON body.
 type FetchKeyResponse struct {
 	EphemeralKeyMaterial string `json:"ephemeral_key_material"`
 }
 
-// NewClient creates a new key server client
-func NewClient() *Client {
-	return &Client{
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-	}
+var allowedCapsuleTypes = map[string]struct{}{
+	"ecc_secp256r1": {},
+	"ecc_secp384r1": {},
+	"ecc_secp521r1": {},
+	"rsa":           {},
 }
 
-// NewClientWithTLS creates a new key server client with custom TLS configuration
+// NewClientWithTLS creates a client with server trust and optional recipient-scoped mTLS cert for GET.
 func NewClientWithTLS(serverCert *x509.Certificate, clientCert *tls.Certificate) *Client {
-	client := NewClient()
-
-	// Create TLS config
-	tlsConfig := &tls.Config{
-		MinVersion: tls.VersionTLS12,
-	}
-
-	// Add server certificate to trust pool if provided
+	var pool *x509.CertPool
 	if serverCert != nil {
-		pool := x509.NewCertPool()
+		pool = x509.NewCertPool()
 		pool.AddCert(serverCert)
-		tlsConfig.RootCAs = pool
 	}
-
-	// Add client certificate if provided
+	var cc *tls.Certificate
 	if clientCert != nil {
-		tlsConfig.Certificates = []tls.Certificate{*clientCert}
+		cc = clientCert
 	}
-
-	// Update HTTP client transport
-	transport := &http.Transport{
-		TLSClientConfig: tlsConfig,
-	}
-	client.httpClient.Transport = transport
-
-	return client
+	post := riahttp.NewClient(riahttp.Config{
+		Transport: riahttp.NewTransportTLS(pool, nil, false),
+	})
+	fetch := riahttp.NewClient(riahttp.Config{
+		Transport: riahttp.NewTransportTLS(pool, cc, false),
+	})
+	return &Client{postHTTP: post, fetchHTTP: fetch}
 }
 
-// SendKey sends key material to the key server and returns transaction information
-func (c *Client) SendKey(config KeyServerConfig, recipientKey []byte, keyMaterial []byte, capsuleType string, expiryTS uint64) (*CapsuleInfo, error) {
-	// Build request body
+// NewClientWithTransports wires separate POST (publisher) and GET (recipient mTLS) HTTP clients.
+func NewClientWithTransports(post, fetch *riahttp.Client) *Client {
+	if post == nil && fetch == nil {
+		return NewClient()
+	}
+	if post == nil {
+		post = fetch
+	}
+	if fetch == nil {
+		fetch = post
+	}
+	return &Client{postHTTP: post, fetchHTTP: fetch}
+}
+
+// NewClientWithHTTP allows injecting a configured riahttp client for both POST and GET (tests).
+func NewClientWithHTTP(h *riahttp.Client) *Client {
+	return &Client{postHTTP: h, fetchHTTP: h}
+}
+
+// PrepareConfig validates URLs and caches parsed bases on config.
+func PrepareConfig(cfg KeyServerConfig) (KeyServerConfig, error) {
+	post, err := riahttp.ValidateBaseURL(cfg.PostURL)
+	if err != nil {
+		return cfg, fmt.Errorf("invalid post URL: %w", err)
+	}
+	fetch, err := riahttp.ValidateBaseURL(cfg.FetchURL)
+	if err != nil {
+		return cfg, fmt.Errorf("invalid fetch URL: %w", err)
+	}
+	cfg.postBase = post
+	cfg.fetchBase = fetch
+	return cfg, nil
+}
+
+// SendKey posts a key capsule (OpenAPI 3.1.2 POST /key-capsules, expect 201).
+func (c *Client) SendKeyWithContext(ctx context.Context, config KeyServerConfig, recipientKey, keyMaterial []byte, capsuleType string, expiryTS uint64) (*CapsuleInfo, error) {
+	hc := c.postClient()
+	if hc == nil {
+		return nil, internal.NewEncryptionError("key server client not configured", nil)
+	}
+	if err := bounds.Len("recipient_id", len(recipientKey), bounds.MaxCapsuleFieldBytes); err != nil {
+		return nil, internal.NewEncryptionError(err.Error(), err)
+	}
+	if err := bounds.Len("ephemeral_key_material", len(keyMaterial), bounds.MaxCapsuleFieldBytes); err != nil {
+		return nil, internal.NewEncryptionError(err.Error(), err)
+	}
+	if _, ok := allowedCapsuleTypes[capsuleType]; !ok {
+		return nil, internal.NewEncryptionError("unsupported capsule_type", nil)
+	}
+
+	cfg, err := PrepareConfig(config)
+	if err != nil {
+		return nil, internal.NewEncryptionError(err.Error(), err)
+	}
+
 	reqBody := SendKeyRequest{
 		RecipientID:          base64.StdEncoding.EncodeToString(recipientKey),
 		EphemeralKeyMaterial: base64.StdEncoding.EncodeToString(keyMaterial),
 		CapsuleType:          capsuleType,
 	}
-
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, internal.NewEncryptionError("failed to marshal send key request", err)
 	}
 
-	// Build URL: add /key-capsules to the base URL
-	url := config.PostURL
-	if url[len(url)-1] != '/' {
-		url += "/"
-	}
-	url += "key-capsules"
-
-	// Create HTTP request
-	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonBody))
+	req, err := hc.NewJSONRequest(ctx, http.MethodPost, cfg.postBase, []string{"key-capsules"}, jsonBody)
 	if err != nil {
-		return nil, internal.NewEncryptionError("failed to create HTTP request", err)
+		return nil, internal.NewEncryptionError(err.Error(), err)
 	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	// Add expiry time header if provided
 	if expiryTS > 0 {
 		req.Header.Set("x-expiry-time", time.Unix(int64(expiryTS), 0).UTC().Format(time.RFC3339))
 	}
 
-	// Send request
-	resp, err := c.httpClient.Do(req)
+	res, err := hc.Do(ctx, req)
 	if err != nil {
 		return nil, internal.NewEncryptionError("failed to send key to server", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// Check status code
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, internal.NewEncryptionError(
-			fmt.Sprintf("key server returned status %d: %s", resp.StatusCode, string(bodyBytes)),
-			nil,
-		)
+	if res.StatusCode != http.StatusCreated {
+		return nil, internal.NewEncryptionError("key server create failed", &riahttp.RemoteError{
+			Op: "key-capsule POST", StatusCode: res.StatusCode, Body: string(res.Body),
+		})
 	}
 
-	// Extract transaction ID from Location header
-	location := resp.Header.Get("Location")
+	location := res.Header.Get("Location")
 	if location == "" {
 		return nil, internal.NewEncryptionError("no Location header in key server response", nil)
 	}
-
-	// Extract transaction ID: location is like "/key-capsules/TRANSACTION_ID"
-	// or "https://server/key-capsules/TRANSACTION_ID"
+	if err := riahttp.AssertSameHost(cfg.postBase, location); err != nil {
+		return nil, internal.NewEncryptionError("Location host mismatch", err)
+	}
 	transactionID := extractTransactionID(location)
-	if transactionID == "" {
-		return nil, internal.NewEncryptionError(fmt.Sprintf("failed to extract transaction ID from Location: %s", location), nil)
+	if len(transactionID) < bounds.MinTransactionIDLen || len(transactionID) > bounds.MaxTransactionIDLen {
+		return nil, internal.NewEncryptionError("invalid transaction id in Location", nil)
 	}
 
-	// Extract expiry time from x-expiry-time header
-	var expiryTime time.Time
-	if expiryStr := resp.Header.Get("x-expiry-time"); expiryStr != "" {
-		if parsedExpiry, err := time.Parse(time.RFC3339, expiryStr); err == nil {
-			expiryTime = parsedExpiry
+	info := &CapsuleInfo{TransactionID: transactionID, CapsuleType: capsuleType}
+	if expiryStr := res.Header.Get("x-expiry-time"); expiryStr != "" {
+		parsed, err := time.Parse(time.RFC3339, expiryStr)
+		if err != nil {
+			return nil, internal.NewEncryptionError("invalid x-expiry-time", err)
 		}
+		info.ExpiryTime = parsed
 	}
-
-	return &CapsuleInfo{
-		TransactionID: transactionID,
-		ExpiryTime:    expiryTime,
-	}, nil
+	if strings.EqualFold(res.Header.Get("x-expiry-time-adjusted"), "true") {
+		info.ExpiryAdjusted = true
+	}
+	if c.onCapsuleCreated != nil {
+		c.onCapsuleCreated(*info)
+	}
+	return info, nil
 }
 
-// FetchKey fetches key material from the key server using transaction ID
-func (c *Client) FetchKey(config KeyServerConfig, transactionID string) ([]byte, error) {
-	// Build URL: add /key-capsules/{transaction_id} to the base URL
-	url := config.FetchURL
-	if url[len(url)-1] != '/' {
-		url += "/"
+// FetchKey retrieves a key capsule (GET /key-capsules/{transactionId}, recipient mTLS on fetch base).
+func (c *Client) FetchKeyWithContext(ctx context.Context, config KeyServerConfig, transactionID string) ([]byte, error) {
+	hc := c.fetchClient()
+	if hc == nil {
+		return nil, internal.NewDecryptionError("key server client not configured", nil)
 	}
-	url += "key-capsules/" + transactionID
+	if len(transactionID) < bounds.MinTransactionIDLen || len(transactionID) > bounds.MaxTransactionIDLen {
+		return nil, internal.NewDecryptionError("invalid transaction id", nil)
+	}
 
-	// Create HTTP request
-	req, err := http.NewRequest("GET", url, nil)
+	cfg, err := PrepareConfig(config)
 	if err != nil {
-		return nil, internal.NewDecryptionError("failed to create HTTP request", err)
+		return nil, internal.NewDecryptionError(err.Error(), err)
 	}
 
-	// Send request
-	resp, err := c.httpClient.Do(req)
+	res, err := hc.Get(ctx, cfg.fetchBase, "key-capsules", transactionID)
 	if err != nil {
-		return nil, internal.NewDecryptionError("failed to fetch key from server", err)
+		return nil, riahttp.PrivacySafeError("key-capsule GET", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// Check status code
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, internal.NewDecryptionError(
-			fmt.Sprintf("key server returned status %d: %s", resp.StatusCode, string(bodyBytes)),
-			nil,
-		)
+	if res.StatusCode != http.StatusOK {
+		re := &riahttp.RemoteError{Op: "key-capsule GET", StatusCode: res.StatusCode, Body: string(res.Body)}
+		return nil, riahttp.PrivacySafeError("key-capsule GET", re)
 	}
 
-	// Parse JSON response
 	var fetchResp FetchKeyResponse
-	if err := json.NewDecoder(resp.Body).Decode(&fetchResp); err != nil {
+	if err := json.Unmarshal(res.Body, &fetchResp); err != nil {
 		return nil, internal.NewDecryptionError("failed to decode key server response", err)
 	}
-
-	// Decode base64 key material
 	keyMaterial, err := base64.StdEncoding.DecodeString(fetchResp.EphemeralKeyMaterial)
 	if err != nil {
 		return nil, internal.NewDecryptionError("failed to decode key material", err)
 	}
-
+	if err := bounds.Len("ephemeral_key_material", len(keyMaterial), bounds.MaxCapsuleFieldBytes); err != nil {
+		return nil, internal.NewDecryptionError(err.Error(), err)
+	}
 	return keyMaterial, nil
 }
 
-// extractTransactionID extracts the transaction ID from a Location header
-// Location can be:
-// - "/key-capsules/TRANSACTION_ID"
-// - "https://server/key-capsules/TRANSACTION_ID"
-// - "https://server:8443/key-capsules/TRANSACTION_ID"
 func extractTransactionID(location string) string {
-	// Find the last occurrence of "/key-capsules/"
 	prefix := "/key-capsules/"
 	idx := strings.LastIndex(location, prefix)
 	if idx == -1 {
 		return ""
 	}
-
-	// Extract everything after "/key-capsules/"
 	transactionID := location[idx+len(prefix):]
-
-	// Remove any trailing path components or query parameters
 	if slashIdx := strings.Index(transactionID, "/"); slashIdx != -1 {
 		transactionID = transactionID[:slashIdx]
 	}
 	if queryIdx := strings.Index(transactionID, "?"); queryIdx != -1 {
 		transactionID = transactionID[:queryIdx]
 	}
-
 	return transactionID
+}
+
+// SendKey preserves the original API. Prefer SendKeyWithContext for cancellable requests.
+func (c *Client) SendKey(config KeyServerConfig, recipientKey, keyMaterial []byte, capsuleType string, expiryTS uint64) (*CapsuleInfo, error) {
+	return c.SendKeyWithContext(context.Background(), config, recipientKey, keyMaterial, capsuleType, expiryTS)
+}
+
+// FetchKey preserves the original API. Prefer FetchKeyWithContext for cancellable requests.
+func (c *Client) FetchKey(config KeyServerConfig, transactionID string) ([]byte, error) {
+	return c.FetchKeyWithContext(context.Background(), config, transactionID)
 }

@@ -18,7 +18,9 @@ const (
 	// SecP256R1OID is the OID for secp256r1 (aka prime256v1) curve
 	SecP256R1OID = "1.2.840.10045.3.1.7"
 	// SecP384R1OID is the OID for secp384r1 curve
-	SecP384R1OID    = "1.3.132.0.34"
+	SecP384R1OID = "1.3.132.0.34"
+	// SecP521R1OID is the OID for secp521r1 curve
+	SecP521R1OID    = "1.3.132.0.35"
 	DigestSHA256URI = "http://www.w3.org/2001/04/xmlenc#sha256"
 	DigestSHA384URI = "http://www.w3.org/2001/04/xmlenc#sha384"
 	DigestSHA512URI = "http://www.w3.org/2001/04/xmlenc#sha512"
@@ -29,6 +31,8 @@ var (
 	P256 = elliptic.P256()
 	// P384 is the secp384r1 curve
 	P384 = elliptic.P384()
+	// P521 is secp521r1 curve (RIA Key Capsule profile).
+	P521 = elliptic.P521()
 )
 
 type ecCurveInfo struct {
@@ -48,9 +52,14 @@ func curveInfo(curve elliptic.Curve) (ecCurveInfo, error) {
 			namedCurveOID: SecP384R1OID,
 			digestURI:     DigestSHA384URI,
 		}, nil
+	case P521:
+		return ecCurveInfo{
+			namedCurveOID: SecP521R1OID,
+			digestURI:     DigestSHA512URI,
+		}, nil
 	default:
 		return ecCurveInfo{}, internal.NewEncryptionError(
-			fmt.Sprintf("unsupported curve, only secp256r1 and secp384r1 are supported, got %T", curve),
+			fmt.Sprintf("unsupported curve, only secp256r1, secp384r1 and secp521r1 are supported, got %T", curve),
 			nil,
 		)
 	}

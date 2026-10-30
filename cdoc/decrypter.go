@@ -1,6 +1,7 @@
 package cdoc
 
 import (
+	"context"
 	"io"
 	"os"
 
@@ -8,6 +9,7 @@ import (
 	"crypto/x509"
 
 	c2 "github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2"
+	c2central "github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2/central"
 	c2keyserver "github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2/keyserver"
 	"github.com/aarepuusepp/libcdoc-go/v2/crypto"
 	"github.com/aarepuusepp/libcdoc-go/v2/internal"
@@ -17,15 +19,21 @@ import (
 
 // Decrypter implements decryption of CDOC documents
 type Decrypter struct {
-	cdocReader       io.Reader
-	cdocFile         string
-	privateKey       *key.PrivateKey
-	token            Token                  // Optional: token for decryption (PKCS#11, PKCS#12, etc.)
-	certificate      *x509.Certificate      // Optional: for recipient selection when multiple recipients
-	password         string                 // For password-based decryption (CDOC 2.0)
-	symmetricKey     []byte                 // For symmetric key decryption (CDOC 2.0)
-	keyServerClient  interface{}            // *cdoc2/keyserver.Client - set via SetKeyServerClient
-	keyServerConfigs map[string]interface{} // map[serverID]*cdoc2/keyserver.KeyServerConfig
+	cdocReader             io.Reader
+	cdocFile               string
+	privateKey             *key.PrivateKey
+	token                  Token                  // Optional: token for decryption (PKCS#11, PKCS#12, etc.)
+	certificate            *x509.Certificate      // Optional: for recipient selection when multiple recipients
+	password               string                 // For password-based decryption (CDOC 2.0)
+	symmetricKey           []byte                 // For symmetric key decryption (CDOC 2.0)
+	keyServerClient        interface{}            // *cdoc2/keyserver.Client - set via SetKeyServerClient
+	keyServerConfigs       map[string]interface{} // map[serverID]*cdoc2/keyserver.KeyServerConfig
+	centralServices        *c2central.Services
+	authMeansID            string
+	authMeansType          c2central.AuthMeansType
+	authMobileNr           string
+	prefetchedKeyShares    [][]byte
+	prefetchedKeySharesMin int
 }
 
 // NewDecrypter creates a new Decrypter instance
@@ -119,6 +127,37 @@ func (d *Decrypter) AddKeyServerConfig(config interface{}) *Decrypter {
 			d.keyServerConfigs[cfg.ServerID] = *cfg
 		}
 	}
+	return d
+}
+
+// SetCentralServices configures RIA central CDOC2 clients for auth-means decryption.
+func (d *Decrypter) SetCentralServices(services *c2central.Services) *Decrypter {
+	d.centralServices = services
+	return d
+}
+
+// WithAuthMeansDecrypt configures Smart-ID / Mobile-ID decryption identity.
+func (d *Decrypter) WithAuthMeansDecrypt(etsiIdentifier string, authType c2central.AuthMeansType, mobileNr string) *Decrypter {
+	d.authMeansID = etsiIdentifier
+	d.authMeansType = authType
+	d.authMobileNr = mobileNr
+	return d
+}
+
+// WithPreFetchedKeyShares supplies key share bytes recovered outside the decrypter.
+// When set, auth-server and share-server fetch is skipped during CDOC2 decryption.
+func (d *Decrypter) WithPreFetchedKeyShares(shares [][]byte, minRequired int) *Decrypter {
+	if len(shares) == 0 {
+		d.prefetchedKeyShares = nil
+		d.prefetchedKeySharesMin = 0
+		return d
+	}
+	copied := make([][]byte, len(shares))
+	for i, share := range shares {
+		copied[i] = append([]byte(nil), share...)
+	}
+	d.prefetchedKeyShares = copied
+	d.prefetchedKeySharesMin = minRequired
 	return d
 }
 
@@ -302,15 +341,42 @@ func (d *Decrypter) decryptCDOC2(r io.ReaderAt) ([]DecryptedFile, error) {
 		return nil, internal.NewDecryptionError("no recipients in CDOC2 header", nil)
 	}
 
-	sel := 0
+	sel := -1
 	if d.certificate != nil {
-		// Try to find a lock that matches the certificate
-		for i := range locks {
-			ok, _ := locks[i].MatchesCertificate(d.certificate)
-			if ok {
-				sel = i
-				break
+		// Prefer key-server locks when recipient mTLS client is configured.
+		if d.keyServerClient != nil && d.keyServerConfigs != nil {
+			for i := range locks {
+				lock := locks[i]
+				if lock.Type != c2.LockTypeServer {
+					continue
+				}
+				if _, ok := d.keyServerConfigs[lock.ServerID]; !ok {
+					continue
+				}
+				ok, err := lock.MatchesCertificate(d.certificate)
+				if err != nil {
+					return nil, err
+				}
+				if ok {
+					sel = i
+					break
+				}
 			}
+		}
+		if sel < 0 {
+			for i := range locks {
+				ok, err := locks[i].MatchesCertificate(d.certificate)
+				if err != nil {
+					return nil, err
+				}
+				if ok {
+					sel = i
+					break
+				}
+			}
+		}
+		if sel < 0 {
+			return nil, internal.NewDecryptionError("no matching recipient for certificate", nil)
 		}
 	} else {
 		// Try to find a compatible lock based on decryption method.
@@ -322,10 +388,22 @@ func (d *Decrypter) decryptCDOC2(r io.ReaderAt) ([]DecryptedFile, error) {
 				for i := range locks {
 					lock := locks[i]
 					if lock.Type == c2.LockTypeServer {
-						if _, ok := d.keyServerConfigs[lock.ServerID]; ok {
-							sel = i
-							goto selected
+						if _, ok := d.keyServerConfigs[lock.ServerID]; !ok {
+							continue
 						}
+						if d.privateKey != nil {
+							if _, ok := d.privateKey.RSAPrivateKey(); ok && lock.PKType == c2.PKTypeRSA {
+								sel = i
+								goto selected
+							}
+							if _, ok := d.privateKey.ECPrivateKey(); ok && lock.PKType == c2.PKTypeECC {
+								sel = i
+								goto selected
+							}
+							continue
+						}
+						sel = i
+						goto selected
 					}
 				}
 			}
@@ -351,9 +429,19 @@ func (d *Decrypter) decryptCDOC2(r io.ReaderAt) ([]DecryptedFile, error) {
 					goto selected
 				}
 			}
+		} else if d.authMeansID != "" && (d.centralServices != nil || len(d.prefetchedKeyShares) > 0) {
+			for i := range locks {
+				if locks[i].Type == c2.LockTypeKeyShares && locks[i].RecipientID == d.authMeansID {
+					sel = i
+					goto selected
+				}
+			}
 		}
 
 	selected:
+		if sel < 0 {
+			sel = 0
+		}
 	}
 
 	// Prepare FMK options from provided key/token/password
@@ -412,8 +500,41 @@ func (d *Decrypter) decryptCDOC2(r io.ReaderAt) ([]DecryptedFile, error) {
 		}
 	}
 
+	if selectedLock.Type == c2.LockTypeKeyShares && d.authMeansID != "" {
+		if len(d.prefetchedKeyShares) > 0 {
+			minRequired := d.prefetchedKeySharesMin
+			if minRequired <= 0 && d.centralServices != nil {
+				minRequired = d.centralServices.SharesMinRequired
+			}
+			opts.KeySharesAction = &c2.KeySharesAction{
+				ShareBytes:  d.prefetchedKeyShares,
+				MinRequired: minRequired,
+			}
+		} else if d.centralServices != nil {
+			shareRefs := make([]c2central.ShareReference, 0, len(selectedLock.KeyShares))
+			for _, sh := range selectedLock.KeyShares {
+				shareRefs = append(shareRefs, c2central.ShareReference{
+					ServerBaseURL: sh.URL,
+					ShareID:       sh.TransactionID,
+				})
+			}
+			session, err := d.centralServices.StartAuthSession(context.Background(), d.authMeansID, d.authMobileNr, "et")
+			if err != nil {
+				return nil, err
+			}
+			shareBytes, err := d.centralServices.FetchKeyShares(context.Background(), session, d.authMeansID, shareRefs, d.authMeansType, d.authMobileNr)
+			if err != nil {
+				return nil, err
+			}
+			opts.KeySharesAction = &c2.KeySharesAction{
+				ShareBytes:  shareBytes,
+				MinRequired: d.centralServices.SharesMinRequired,
+			}
+		}
+	}
+
 	// If no decryption method provided, try to find a compatible lock
-	if opts.RSAPrivateKey == nil && opts.ECDSAPrivateKey == nil && opts.Password == "" && opts.SymmetricKey == nil && opts.KeyServerAction == nil {
+	if opts.RSAPrivateKey == nil && opts.ECDSAPrivateKey == nil && opts.Password == "" && opts.SymmetricKey == nil && opts.KeyServerAction == nil && opts.KeySharesAction == nil && opts.PKCS11Token == nil {
 		return nil, internal.NewDecryptionError("no decryption method provided (private key, password, symmetric key, or key server)", nil)
 	}
 
@@ -644,8 +765,10 @@ func (d *Decrypter) validateParameters() error {
 	}
 
 	// Check if any decryption method is provided
-	if d.privateKey == nil && d.token == nil && d.password == "" && d.symmetricKey == nil {
-		return internal.NewDecryptionError("no decryption method provided (private key, token, password, or symmetric key)", nil)
+	authMeansReady := d.authMeansID != "" && (d.centralServices != nil || len(d.prefetchedKeyShares) > 0)
+	if d.privateKey == nil && d.token == nil && d.password == "" && d.symmetricKey == nil &&
+		d.keyServerClient == nil && !authMeansReady {
+		return internal.NewDecryptionError("no decryption method provided (private key, token, password, symmetric key, key server, or auth-means)", nil)
 	}
 
 	return nil

@@ -4,7 +4,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/rsa"
 	"crypto/x509"
-	"fmt"
 
 	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 )
@@ -18,6 +17,7 @@ const (
 	LockTypeServer                // Key server (Smart-ID/Mobile-ID)
 	LockTypeSymmetricKey          // Symmetric key
 	LockTypePassword              // Password-based (PBKDF2)
+	LockTypeKeyShares             // Smart-ID / Mobile-ID key shares
 )
 
 // PKType represents the public key type
@@ -49,8 +49,13 @@ type Lock struct {
 	PasswordSalt []byte
 	KDFIter      int32 // PBKDF2 iterations
 
+	// For KEY_SHARES type
+	KeyShares   []KeyShare
+	SharesSalt  []byte
+	RecipientID string
+
 	// For certificate matching
-	Certificate *x509.Certificate // Optional: parsed certificate for matching
+	Certificate *x509.Certificate
 }
 
 // Capsule concrete types for parsed header mapping
@@ -125,13 +130,7 @@ func (l *Lock) MatchesCertificate(cert *x509.Certificate) (bool, error) {
 		return false, nil
 	}
 
-	// Inline ECC capsules use SubjectPublicKeyInfo DER; key-server locks use raw points.
-	if l.Type == LockTypePublicKey && l.HasSameKey(cert.RawSubjectPublicKeyInfo) {
-		return true, nil
-	}
-
-	// Try to extract public key from certificate and compare
-	certKey, err := extractPublicKeyBytes(cert)
+	certKey, err := extractPublicKeyBytesForLock(l, cert)
 	if err != nil {
 		return false, err
 	}
@@ -139,36 +138,18 @@ func (l *Lock) MatchesCertificate(cert *x509.Certificate) (bool, error) {
 	return l.HasSameKey(certKey), nil
 }
 
-// extractPublicKeyBytes extracts the public key bytes from a certificate
-// For RSA: DER-encoded public key
-// For ECC: TLS 1.3 format (0x04 + X + Y coordinates)
-//
-//nolint:staticcheck // CDOC2 key-server locks require raw EC point coordinate encoding.
-func extractPublicKeyBytes(cert *x509.Certificate) ([]byte, error) {
+func extractPublicKeyBytesForLock(l *Lock, cert *x509.Certificate) ([]byte, error) {
 	switch pubKey := cert.PublicKey.(type) {
 	case *ecdsa.PublicKey:
-		// ECC: TLS 1.3 format - 0x04 prefix + X (48 bytes) + Y (48 bytes) for secp384r1
-		if pubKey.Curve.Params().BitSize != 384 {
-			return nil, internal.NewParseError(
-				fmt.Sprintf("unsupported curve bit size: %d (only secp384r1 supported)", pubKey.Curve.Params().BitSize),
-				nil,
-			)
+		if l != nil && l.Type == LockTypePublicKey && l.PKType == PKTypeECC {
+			return cert.RawSubjectPublicKeyInfo, nil
 		}
-
-		keySize := 48 // secp384r1 coordinate size
-		result := make([]byte, 1+keySize*2)
-		result[0] = 0x04 // Uncompressed point format
-
-		// Convert X and Y to bytes (big-endian, padded to keySize)
-		xBytes := pubKey.X.Bytes()
-		yBytes := pubKey.Y.Bytes()
-
-		copy(result[1+keySize-len(xBytes):1+keySize], xBytes)
-		copy(result[1+keySize*2-len(yBytes):1+keySize*2], yBytes)
-
-		return result, nil
+		enc, err := EncodeECKeyServerRecipient(pubKey)
+		if err != nil {
+			return nil, internal.NewParseError(err.Error(), err)
+		}
+		return enc.TLSPoint, nil
 	default:
-		// RSA: return SubjectPublicKeyInfo DER bytes
 		if _, ok := cert.PublicKey.(*rsa.PublicKey); ok {
 			return cert.RawSubjectPublicKeyInfo, nil
 		}

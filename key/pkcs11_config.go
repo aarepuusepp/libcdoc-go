@@ -39,4 +39,3 @@ func (c *PKCS11Config) Validate() error {
 
 	return nil
 }
-

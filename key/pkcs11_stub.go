@@ -41,4 +41,3 @@ func (c *PKCS11Context) DecryptRSA(keyHandle any, encryptedKey []byte) ([]byte, 
 func (c *PKCS11Context) DecryptEC(keyHandle any, ephemeralPublicKey *ecdsa.PublicKey) ([]byte, error) {
 	return nil, NewPKCS11Error("PKCS#11 support requires CGO-enabled build", nil)
 }
-

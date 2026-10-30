@@ -38,7 +38,7 @@ func NewMockServer() *MockServer {
 	mux.HandleFunc("/key-capsules", mock.handlePostKeyCapsule)
 	mux.HandleFunc("/key-capsules/", mock.handleGetKeyCapsule)
 
-	mock.server = httptest.NewServer(mux)
+	mock.server = httptest.NewTLSServer(mux)
 
 	return mock
 }
@@ -75,13 +75,13 @@ func (m *MockServer) handlePostKeyCapsule(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Generate transaction ID (32 bytes hex-encoded = 64 chars)
-	txIDBytes := make([]byte, 32)
+	// Generate transaction ID (16 bytes hex = 32 chars, within OpenAPI 18-34 when prefixed)
+	txIDBytes := make([]byte, 16)
 	if _, err := rand.Read(txIDBytes); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to generate transaction ID: %v", err), http.StatusInternalServerError)
 		return
 	}
-	transactionID := hex.EncodeToString(txIDBytes)
+	transactionID := "KC" + hex.EncodeToString(txIDBytes)
 
 	// Parse expiry time from header if present
 	var expiryTime *time.Time
@@ -170,8 +170,15 @@ func (m *MockServer) GetCapsule(transactionID string) (*KeyCapsule, bool) {
 	return capsule, exists
 }
 
+// PutCapsule stores a capsule copy (for tests that use separate POST/GET mock bases).
+func (m *MockServer) PutCapsule(transactionID string, capsule KeyCapsule) {
+	m.capsulesMux.Lock()
+	defer m.capsulesMux.Unlock()
+	cp := capsule
+	m.capsules[transactionID] = &cp
+}
+
 // DecodeKeyMaterial decodes base64-encoded key material from a capsule
 func (c *KeyCapsule) DecodeKeyMaterial() ([]byte, error) {
 	return base64.StdEncoding.DecodeString(c.EphemeralKeyMaterial)
 }
-

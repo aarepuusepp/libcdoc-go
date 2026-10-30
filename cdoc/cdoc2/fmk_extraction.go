@@ -1,6 +1,7 @@
 package cdoc2
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -32,6 +33,11 @@ type PKCS11TokenInterface interface {
 // For Key Server: action must be a *KeyServerAction (defined in reader.go)
 // For PKCS#11: pkcs11Token must be a PKCS11TokenInterface (e.g., *PKCS11Token)
 func ExtractFMKFromLock(lock Lock, privateKey interface{}, symmetricKey []byte, password string, action *KeyServerAction, pkcs11Token PKCS11TokenInterface) ([]byte, error) {
+	return ExtractFMKFromLockWithShares(lock, privateKey, symmetricKey, password, action, nil, pkcs11Token)
+}
+
+// ExtractFMKFromLockWithShares additionally supports supplied N-of-N key shares.
+func ExtractFMKFromLockWithShares(lock Lock, privateKey interface{}, symmetricKey []byte, password string, action *KeyServerAction, sharesAction *KeySharesAction, pkcs11Token PKCS11TokenInterface) ([]byte, error) {
 	var kek []byte
 	var err error
 
@@ -136,7 +142,7 @@ func ExtractFMKFromLock(lock Lock, privateKey interface{}, symmetricKey []byte, 
 		}
 
 		// Fetch key material from key server using transaction ID
-		keyMaterial, err := action.KeyServerClient.FetchKey(action.KeyServerConfig, lock.TransactionID)
+		keyMaterial, err := action.KeyServerClient.FetchKeyWithContext(context.Background(), action.KeyServerConfig, lock.TransactionID)
 		if err != nil {
 			return nil, internal.NewDecryptionError("failed to fetch key from key server", err)
 		}
@@ -182,6 +188,15 @@ func ExtractFMKFromLock(lock Lock, privateKey interface{}, symmetricKey []byte, 
 			}
 		default:
 			return nil, internal.NewDecryptionError("unsupported key type for key server", nil)
+		}
+
+	case LockTypeKeyShares:
+		if sharesAction == nil || len(sharesAction.ShareBytes) != sharesAction.MinRequired {
+			return nil, internal.NewDecryptionError("key shares not provided (N-of-N requires all shares)", nil)
+		}
+		kek, err = DeriveKEKFromKeyShares(lock.SharesSalt, lock.RecipientID, sharesAction.ShareBytes, sharesAction.MinRequired)
+		if err != nil {
+			return nil, err
 		}
 
 	default:

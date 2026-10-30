@@ -132,4 +132,3 @@ func TestNewParser(t *testing.T) {
 		t.Fatal("NewParser() returned nil")
 	}
 }
-

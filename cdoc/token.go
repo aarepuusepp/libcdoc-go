@@ -20,4 +20,3 @@ type Token interface {
 	// encryptedKey is the wrapped content encryption key
 	DecryptEC(ephemeralPublicKey *ecdsa.PublicKey, algorithmID []byte, partyUInfo []byte, partyVInfo []byte, encryptedKey []byte) ([]byte, error)
 }
-

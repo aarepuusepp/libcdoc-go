@@ -8,10 +8,14 @@ import (
 	"crypto/rsa"
 	"io"
 
+	"github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2/bounds"
 	"github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2/keyserver"
 	"github.com/aarepuusepp/libcdoc-go/v2/crypto"
 	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 )
+
+// maxDecompressedGzipBytes caps gzip expansion during payload decode (overridable in tests).
+var maxDecompressedGzipBytes = bounds.MaxDecompressedTarEntry
 
 // Reader implements reading and decrypting CDOC2 files
 type Reader struct {
@@ -33,6 +37,12 @@ type KeyServerAction struct {
 	KeyServerConfig keyserver.KeyServerConfig
 }
 
+// KeySharesAction provides fetched share bytes for decryption.
+type KeySharesAction struct {
+	ShareBytes  [][]byte
+	MinRequired int
+}
+
 // FMKOptions provides decryption inputs for different recipient types
 // Only one of RSAPrivateKey or ECDSAPrivateKey should be set for PUBLIC_KEY
 // For SYMMETRIC_KEY provide SymmetricKey; for PASSWORD provide Password
@@ -44,6 +54,7 @@ type FMKOptions struct {
 	SymmetricKey    []byte
 	Password        string
 	KeyServerAction *KeyServerAction
+	KeySharesAction *KeySharesAction
 	PKCS11Token     PKCS11TokenInterface // Token interface for PKCS#11 hardware tokens
 }
 
@@ -135,8 +146,11 @@ func (r *Reader) GetLocks() ([]Lock, error) {
 			l.RecipientKey = append([]byte(nil), c.RecipientKey...)
 			l.PKType = c.PKType
 		case KeySharesCapsule:
-			// Not yet supported; skip for now
-			continue
+			l.Type = LockTypeKeyShares
+			l.KeyShares = append([]KeyShare(nil), c.Shares...)
+			l.SharesSalt = append([]byte(nil), c.Salt...)
+			l.RecipientID = c.RecipientID
+			l.Label = rr.KeyLabel
 		default:
 			// Unknown capsule, skip
 			continue
@@ -190,7 +204,7 @@ func (r *Reader) ExtractFMK(lockIndex int, opts FMKOptions) ([]byte, error) {
 			}
 		}
 	}
-	fmk, err := ExtractFMKFromLock(lock, priv, opts.SymmetricKey, opts.Password, keyServerAction, opts.PKCS11Token)
+	fmk, err := ExtractFMKFromLockWithShares(lock, priv, opts.SymmetricKey, opts.Password, keyServerAction, opts.KeySharesAction, opts.PKCS11Token)
 	if err != nil {
 		return nil, err
 	}
@@ -350,7 +364,15 @@ func decompressGzip(data []byte) ([]byte, error) {
 			return nil, err
 		}
 		defer func() { _ = reader.Close() }()
-		return io.ReadAll(reader)
+		limited := io.LimitReader(reader, int64(maxDecompressedGzipBytes)+1)
+		out, err := io.ReadAll(limited)
+		if err != nil {
+			return nil, err
+		}
+		if len(out) > maxDecompressedGzipBytes {
+			return nil, internal.NewParseError("decompressed payload exceeds limit", nil)
+		}
+		return out, nil
 	}
 
 	// Not compressed, return as-is

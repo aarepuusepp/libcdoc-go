@@ -99,4 +99,3 @@ func GetSaltForExpandWithKeyMaterial(recipientKey, keyMaterial []byte) string {
 	result += string(keyMaterial)
 	return result
 }
-

@@ -97,4 +97,3 @@ func (c *Composer) createDDOCXML() ([]byte, error) {
 
 	return buf.Bytes(), nil
 }
-

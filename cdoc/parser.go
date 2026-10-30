@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"io"
-	"math/big"
 	"strconv"
 	"strings"
 
@@ -273,24 +272,12 @@ func (p *Parser) parseECPublicKey(base64PublicKey string, namedCurveURI string) 
 		return nil, internal.NewParseError("invalid EC public key length", nil)
 	}
 
-	// Split into X and Y coordinates
-	xBytes := publicKeyBytes[offset : offset+coordLen]
-	yBytes := publicKeyBytes[offset+coordLen : offset+2*coordLen]
-
-	x := new(big.Int).SetBytes(xBytes)
-	y := new(big.Int).SetBytes(yBytes)
-
-	// Validate point is on curve.
-	//nolint:staticcheck // CDOC XMLENC stores legacy EC coordinates that are validated here.
-	if !curve.IsOnCurve(x, y) {
-		return nil, internal.NewParseError("EC point is not on curve", nil)
+	encoded := append([]byte{4}, publicKeyBytes[offset:]...)
+	public, err := ecdsa.ParseUncompressedPublicKey(curve, encoded)
+	if err != nil {
+		return nil, internal.NewParseError("EC point is not on curve", err)
 	}
-
-	return &ecdsa.PublicKey{
-		Curve: curve,
-		X:     x,
-		Y:     y,
-	}, nil
+	return public, nil
 }
 
 // GetEncryptedContent returns the base64-encoded encrypted content

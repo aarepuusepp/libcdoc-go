@@ -33,4 +33,3 @@ const (
 	// KeyLabelVersion is the version of key label format
 	KeyLabelVersion = 1
 )
-

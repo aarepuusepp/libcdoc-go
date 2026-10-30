@@ -8,6 +8,7 @@ import (
 
 	c2 "github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2"
 	c2keyserver "github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2/keyserver"
+	c2keyshares "github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2/keyshares"
 	"github.com/aarepuusepp/libcdoc-go/v2/cert"
 	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 )
@@ -26,8 +27,17 @@ type Builder struct {
 	passwords           []PasswordRecipient
 	symmetricKeys       [][]byte
 	keyServerRecipients []KeyServerRecipient   // For CDOC 2.0 key server recipients
+	authMeansRecipients []AuthMeansRecipient   // Smart-ID / Mobile-ID
 	keyServerClient     interface{}            // *cdoc2/keyserver.Client - set via SetKeyServerClient
 	keyServerConfigs    map[string]interface{} // map[serverID]*cdoc2/keyserver.KeyServerConfig
+	sharesClients       []*c2keyshares.Client
+	sharesMinRequired   int
+}
+
+// AuthMeansRecipient holds Smart-ID / Mobile-ID recipient configuration.
+type AuthMeansRecipient struct {
+	EtsiIdentifier string
+	Label          string
 }
 
 // KeyServerRecipient holds certificate and key server configuration for CDOC 2.0
@@ -191,6 +201,28 @@ func (b *Builder) AddKeyServerConfig(config c2keyserver.KeyServerConfig) *Builde
 	return b
 }
 
+// WithAuthMeansRecipient adds a Smart-ID / Mobile-ID recipient (CDOC 2.0 central key-shares).
+func (b *Builder) WithAuthMeansRecipient(etsiIdentifier, label string) error {
+	if b.version != Version20 {
+		return internal.NewValidationError("auth-means recipients are only supported in CDOC 2.0", nil)
+	}
+	if etsiIdentifier == "" {
+		return internal.NewValidationError("ETSI identifier cannot be empty", nil)
+	}
+	b.authMeansRecipients = append(b.authMeansRecipients, AuthMeansRecipient{
+		EtsiIdentifier: etsiIdentifier,
+		Label:          label,
+	})
+	return nil
+}
+
+// SetSharesClients configures key-shares servers for auth-means encryption.
+func (b *Builder) SetSharesClients(clients []*c2keyshares.Client, minRequired int) *Builder {
+	b.sharesClients = clients
+	b.sharesMinRequired = minRequired
+	return b
+}
+
 // BuildToWriter builds the CDOC document and writes it to the provided writer
 func (b *Builder) BuildToWriter(w io.Writer) error {
 	if err := b.validateParameters(); err != nil {
@@ -214,6 +246,9 @@ func (b *Builder) BuildToWriter(w io.Writer) error {
 				}
 			}
 		}
+		if len(b.sharesClients) > 0 {
+			writer.SetSharesClients(b.sharesClients, b.sharesMinRequired)
+		}
 
 		// Map certificate recipients (regular, not key server)
 		for _, rc := range b.recipients {
@@ -228,6 +263,14 @@ func (b *Builder) BuildToWriter(w io.Writer) error {
 				ServerID:    ksr.ServerID,
 				Label:       ksr.Label,
 				ExpiryTime:  ksr.ExpiryTime,
+			}); err != nil {
+				return err
+			}
+		}
+		for _, amr := range b.authMeansRecipients {
+			if err := writer.AddRecipient(c2.Recipient{
+				AuthMeansID: amr.EtsiIdentifier,
+				Label:       amr.Label,
 			}); err != nil {
 				return err
 			}
@@ -295,7 +338,7 @@ func (b *Builder) validateParameters() error {
 
 	totalRecipients := len(b.recipients) + len(b.passwords) + len(b.symmetricKeys)
 	if b.version == Version20 {
-		totalRecipients += len(b.keyServerRecipients)
+		totalRecipients += len(b.keyServerRecipients) + len(b.authMeansRecipients)
 	}
 	if totalRecipients == 0 {
 		return internal.NewValidationError("CDOC must contain at least 1 recipient", nil)

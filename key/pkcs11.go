@@ -5,7 +5,6 @@ package key
 
 import (
 	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/x509"
 
 	"github.com/aarepuusepp/libcdoc-go/v2/cert"
@@ -421,17 +420,18 @@ func (c *PKCS11Context) DecryptEC(keyHandle pkcs11.ObjectHandle, ephemeralPublic
 }
 
 func encodeECDHPublicPoint(pub *ecdsa.PublicKey) ([]byte, int, error) {
-	if pub == nil || pub.Curve == nil || pub.X == nil || pub.Y == nil {
+	if pub == nil || pub.Curve == nil {
 		return nil, 0, NewPKCS11Error("EC peer public key is incomplete", nil)
 	}
-	if !pub.Curve.IsOnCurve(pub.X, pub.Y) {
-		return nil, 0, NewPKCS11Error("EC peer public key is not on curve", nil)
+	encoded, err := pub.Bytes()
+	if err != nil {
+		return nil, 0, NewPKCS11Error("EC peer public key is invalid", err)
 	}
-	secretLen := (pub.Curve.Params().BitSize + 7) / 8
+	secretLen := (pub.Params().BitSize + 7) / 8
 	if secretLen <= 0 {
 		return nil, 0, NewPKCS11Error("unsupported EC curve", nil)
 	}
-	return elliptic.Marshal(pub.Curve, pub.X, pub.Y), secretLen, nil
+	return encoded, secretLen, nil
 }
 
 func leftPadSecret(secret []byte, size int) []byte {

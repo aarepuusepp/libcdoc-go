@@ -1,6 +1,7 @@
 package cdoc2
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/rsa"
@@ -17,6 +18,7 @@ import (
 	xpbkdf2 "golang.org/x/crypto/pbkdf2"
 
 	"github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2/keyserver"
+	"github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2/keyshares"
 	"github.com/aarepuusepp/libcdoc-go/v2/crypto"
 	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 )
@@ -33,6 +35,10 @@ type Writer struct {
 	// Key server support
 	keyServerClient  *keyserver.Client
 	keyServerConfigs map[string]keyserver.KeyServerConfig // Map server ID to config
+
+	// Key shares support (Smart-ID / Mobile-ID)
+	sharesClients     []*keyshares.Client
+	sharesMinRequired int
 }
 
 // Recipient represents a recipient for CDOC2 encryption
@@ -44,6 +50,7 @@ type Recipient struct {
 	ServerID      string            // For key-server recipients
 	ExpiryTime    uint64            // Optional expiry time
 	KDFIterations int32             // For password-based (PBKDF2)
+	AuthMeansID   string            // ETSI identifier for SID/MID recipients (e.g. etsi/PNOEE-...)
 }
 
 // NewWriter creates a new CDOC2 writer
@@ -66,6 +73,12 @@ func (w *Writer) AddKeyServerConfig(config keyserver.KeyServerConfig) {
 		w.keyServerConfigs = make(map[string]keyserver.KeyServerConfig)
 	}
 	w.keyServerConfigs[config.ServerID] = config
+}
+
+// SetSharesClients configures key-shares servers for auth-means recipients.
+func (w *Writer) SetSharesClients(clients []*keyshares.Client, minRequired int) {
+	w.sharesClients = clients
+	w.sharesMinRequired = minRequired
 }
 
 // buildRSAKeyServerCapsule builds a KeyServerCapsule with RsaKeyDetails
@@ -93,14 +106,11 @@ func (w *Writer) buildRSAKeyServerCapsule(b *flatbuffers.Builder, recipientPubli
 }
 
 // buildECCKeyServerCapsule builds a KeyServerCapsule with EccKeyDetails
-func (w *Writer) buildECCKeyServerCapsule(b *flatbuffers.Builder, recipientPublicKey []byte, serverID, transactionID string) flatbuffers.UOffsetT {
-	// For ECC, recipientPublicKey should be in TLS 1.3 format (0x04 + X + Y)
-	// Create byte vector BEFORE starting nested objects
+func (w *Writer) buildECCKeyServerCapsule(b *flatbuffers.Builder, recipientPublicKey []byte, serverID, transactionID string, curve rcpt.EllipticCurve) flatbuffers.UOffsetT {
 	pkVec := b.CreateByteVector(recipientPublicKey)
 
-	// Build EccKeyDetails
 	rcpt.EccKeyDetailsStart(b)
-	rcpt.EccKeyDetailsAddCurve(b, rcpt.EllipticCurvesecp384r1)
+	rcpt.EccKeyDetailsAddCurve(b, curve)
 	rcpt.EccKeyDetailsAddRecipientPublicKey(b, pkVec)
 	eccKeyDetailsOff := rcpt.EccKeyDetailsEnd(b)
 
@@ -205,6 +215,14 @@ func (w *Writer) buildHeaderData() ([]byte, error) {
 	// Build recipients
 	recOffsets := make([]flatbuffers.UOffsetT, 0, len(w.recipients))
 	for _, r := range w.recipients {
+		if r.AuthMeansID != "" {
+			rrOffset, err := w.buildAuthMeansRecipientRecord(b, r)
+			if err != nil {
+				return nil, err
+			}
+			recOffsets = append(recOffsets, rrOffset)
+			continue
+		}
 		// Derive per-recipient KEK and encrypted FMK (XOR)
 		var xor []byte
 		var rrOffset flatbuffers.UOffsetT
@@ -233,7 +251,7 @@ func (w *Writer) buildHeaderData() ([]byte, error) {
 					}
 
 					// Send key material (encrypted KEK) to key server
-					capsuleInfo, err := w.keyServerClient.SendKey(config, r.Certificate.RawSubjectPublicKeyInfo, enc, "RSA", r.ExpiryTime)
+					capsuleInfo, err := w.keyServerClient.SendKeyWithContext(context.Background(), config, r.Certificate.RawSubjectPublicKeyInfo, enc, "rsa", r.ExpiryTime)
 					if err != nil {
 						return nil, internal.NewEncryptionError("failed to send key to key server", err)
 					}
@@ -301,21 +319,17 @@ func (w *Writer) buildHeaderData() ([]byte, error) {
 				// (0x04||X||Y). Use that same representation in KEK derivation to keep writer/reader consistent.
 				kdfRecipientKey := rcptDER
 				var recipientPubKeyTLS13 []byte
+				var eccCapsuleType string
+				var eccFBCurve rcpt.EllipticCurve
 				if r.ServerID != "" && w.keyServerClient != nil {
 					if ecdsaPub, ok := r.Certificate.PublicKey.(*ecdsa.PublicKey); ok {
-						if ecdsaPub.Curve.Params().BitSize != 384 {
-							return nil, internal.NewEncryptionError("unsupported curve bit size (only secp384r1 supported)", nil)
+						enc, err := EncodeECKeyServerRecipient(ecdsaPub)
+						if err != nil {
+							return nil, err
 						}
-						keySize := 48 // secp384r1 coordinate size
-						recipientPubKeyTLS13 = make([]byte, 1+keySize*2)
-						recipientPubKeyTLS13[0] = 0x04 // Uncompressed point format
-						// CDOC2 key-server KDF uses the TLS 1.3 uncompressed EC point bytes.
-						//nolint:staticcheck
-						xBytes := ecdsaPub.X.Bytes()
-						//nolint:staticcheck
-						yBytes := ecdsaPub.Y.Bytes()
-						copy(recipientPubKeyTLS13[1+keySize-len(xBytes):1+keySize], xBytes)
-						copy(recipientPubKeyTLS13[1+keySize*2-len(yBytes):1+keySize*2], yBytes)
+						recipientPubKeyTLS13 = enc.TLSPoint
+						eccCapsuleType = enc.CapsuleType
+						eccFBCurve = enc.FBCurve
 						kdfRecipientKey = recipientPubKeyTLS13
 					} else {
 						return nil, internal.NewEncryptionError("certificate public key is not ECC", nil)
@@ -337,13 +351,12 @@ func (w *Writer) buildHeaderData() ([]byte, error) {
 					}
 
 					// Send key material (senderDER = ephemeral public key) to key server
-					capsuleInfo, err := w.keyServerClient.SendKey(config, recipientPubKeyTLS13, senderDER, "ecc_secp384r1", r.ExpiryTime)
+					capsuleInfo, err := w.keyServerClient.SendKeyWithContext(context.Background(), config, recipientPubKeyTLS13, senderDER, eccCapsuleType, r.ExpiryTime)
 					if err != nil {
 						return nil, internal.NewEncryptionError("failed to send key to key server", err)
 					}
 
-					// Build KeyServerCapsule with EccKeyDetails
-					capOff := w.buildECCKeyServerCapsule(b, recipientPubKeyTLS13, config.ServerID, capsuleInfo.TransactionID)
+					capOff := w.buildECCKeyServerCapsule(b, recipientPubKeyTLS13, config.ServerID, capsuleInfo.TransactionID, eccFBCurve)
 
 					// Build RecipientRecord with KeyServerCapsule
 					keyLabel := b.CreateString(r.Label)
