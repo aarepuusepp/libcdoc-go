@@ -1,5 +1,7 @@
 package key
 
+import "crypto/x509"
+
 // PKCS11Config holds configuration for PKCS#11 token operations
 type PKCS11Config struct {
 	// Library is the path to the PKCS#11 library (e.g., /usr/lib/pkcs11/libpkcs11.so)
@@ -16,6 +18,9 @@ type PKCS11Config struct {
 
 	// KeyID is an optional key ID (bytes) to find specific keys on the token
 	KeyID []byte
+
+	// RecipientCert optionally selects the private key/certificate pair matching this cert on the token
+	RecipientCert *x509.Certificate
 }
 
 // Validate validates the PKCS11Config

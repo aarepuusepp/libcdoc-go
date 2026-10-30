@@ -30,6 +30,10 @@ func (c *PKCS11Context) FindCertificate(label string, keyID []byte) (*x509.Certi
 	return nil, NewPKCS11Error("PKCS#11 support requires CGO-enabled build", nil)
 }
 
+func (c *PKCS11Context) FindMatchedKeyPair(recipient *x509.Certificate) (any, *x509.Certificate, error) {
+	return nil, nil, NewPKCS11Error("PKCS#11 support requires CGO-enabled build", nil)
+}
+
 func (c *PKCS11Context) DecryptRSA(keyHandle any, encryptedKey []byte) ([]byte, error) {
 	return nil, NewPKCS11Error("PKCS#11 support requires CGO-enabled build", nil)
 }

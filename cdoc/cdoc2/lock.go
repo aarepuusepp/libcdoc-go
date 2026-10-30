@@ -125,6 +125,11 @@ func (l *Lock) MatchesCertificate(cert *x509.Certificate) (bool, error) {
 		return false, nil
 	}
 
+	// Inline ECC capsules use SubjectPublicKeyInfo DER; key-server locks use raw points.
+	if l.Type == LockTypePublicKey && l.HasSameKey(cert.RawSubjectPublicKeyInfo) {
+		return true, nil
+	}
+
 	// Try to extract public key from certificate and compare
 	certKey, err := extractPublicKeyBytes(cert)
 	if err != nil {

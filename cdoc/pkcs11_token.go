@@ -22,21 +22,24 @@ type PKCS11Token struct {
 
 // NewPKCS11Token creates a new PKCS11Token from a PKCS11Config
 func NewPKCS11Token(config key.PKCS11Config) (*PKCS11Token, error) {
-	// Create PKCS#11 context and initialize session
 	context, err := key.NewPKCS11Context(config)
 	if err != nil {
 		return nil, internal.NewDecryptionError("failed to initialize PKCS#11 context", err)
 	}
 
-	// Find private key on token
-	keyHandle, err := context.FindPrivateKey(config.Label, config.KeyID)
-	if err != nil {
-		_ = context.Close()
-		return nil, internal.NewDecryptionError("failed to find private key on token", err)
-	}
+	var keyHandle pkcs11.ObjectHandle
+	var certificate *x509.Certificate
 
-	// Find certificate on token (for recipient matching)
-	certificate, err := context.FindCertificate(config.Label, config.KeyID)
+	if config.RecipientCert != nil {
+		keyHandle, certificate, err = context.FindMatchedKeyPair(config.RecipientCert)
+	} else {
+		keyHandle, err = context.FindPrivateKey(config.Label, config.KeyID)
+		if err != nil {
+			_ = context.Close()
+			return nil, internal.NewDecryptionError("failed to find private key on token", err)
+		}
+		certificate, err = context.FindCertificate(config.Label, config.KeyID)
+	}
 	if err != nil {
 		_ = context.Close()
 		return nil, internal.NewDecryptionError("failed to find certificate on token", err)
@@ -74,34 +77,34 @@ func (t *PKCS11Token) DecryptRSA(encryptedKey []byte) ([]byte, error) {
 	return t.context.DecryptRSA(t.keyHandle, encryptedKey)
 }
 
-// DecryptEC performs ECDH key agreement and decrypts an EC-encrypted transport key
-// Note: EC decryption via PKCS#11 is currently not fully supported due to token-specific
-// ECDH implementation requirements. This method will return an error indicating
-// that token-specific EC support needs to be implemented.
-func (t *PKCS11Token) DecryptEC(ephemeralPublicKey *ecdsa.PublicKey, algorithmID []byte, partyUInfo []byte, partyVInfo []byte, encryptedKey []byte) ([]byte, error) {
+// DecryptECWithDigest performs ECDH and unwrap using the specified ConcatKDF digest.
+func (t *PKCS11Token) DecryptECWithDigest(ephemeralPublicKey *ecdsa.PublicKey, algorithmID []byte, partyUInfo []byte, partyVInfo []byte, encryptedKey []byte, digestURI string) ([]byte, error) {
 	if t.context == nil {
 		return nil, internal.NewDecryptionError("PKCS#11 context not initialized", nil)
 	}
 
-	// Attempt EC key agreement via PKCS#11
-	// This will currently return an error as EC support needs token-specific implementation
 	sharedSecret, err := t.context.DecryptEC(t.keyHandle, ephemeralPublicKey)
 	if err != nil {
 		return nil, err
 	}
 
-	// If we got here, we have a shared secret (unlikely with current implementation)
-	// Derive wrap key via ConcatKDF (same as software implementation)
-	wrapKey, err := crypto.ConcatKDF(
+	defer clear(sharedSecret)
+	if digestURI == "" {
+		digestURI = crypto.DigestSHA384URI
+	}
+	wrapKey, err := crypto.ConcatKDFWithDigest(
 		sharedSecret,
 		algorithmID,
 		partyUInfo,
 		partyVInfo,
+		digestURI,
+		32,
 	)
 	if err != nil {
 		return nil, internal.NewDecryptionError("failed ConcatKDF", err)
 	}
 
+	defer clear(wrapKey)
 	// Unwrap transport key using AES-KW-256
 	dataKey, err := crypto.UnwrapAES256(encryptedKey, wrapKey)
 	if err != nil {
@@ -119,8 +122,7 @@ func (t *PKCS11Token) DecryptECSharedSecret(ephemeralPublicKey *ecdsa.PublicKey)
 		return nil, internal.NewDecryptionError("PKCS#11 context not initialized", nil)
 	}
 
-	// Attempt EC key agreement via PKCS#11
-	// This will currently return an error as EC support needs token-specific implementation
+	// Derive the shared secret on the token without exporting the private key.
 	sharedSecret, err := t.context.DecryptEC(t.keyHandle, ephemeralPublicKey)
 	if err != nil {
 		return nil, err
@@ -128,4 +130,8 @@ func (t *PKCS11Token) DecryptECSharedSecret(ephemeralPublicKey *ecdsa.PublicKey)
 
 	// Return shared secret directly (CDOC2 will handle HKDF separately)
 	return sharedSecret, nil
+}
+
+func (t *PKCS11Token) DecryptEC(ephemeralPublicKey *ecdsa.PublicKey, algorithmID, partyUInfo, partyVInfo, encryptedKey []byte) ([]byte, error) {
+	return t.DecryptECWithDigest(ephemeralPublicKey, algorithmID, partyUInfo, partyVInfo, encryptedKey, "")
 }

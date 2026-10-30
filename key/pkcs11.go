@@ -5,6 +5,7 @@ package key
 
 import (
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/x509"
 
 	"github.com/aarepuusepp/libcdoc-go/v2/cert"
@@ -218,6 +219,128 @@ func (c *PKCS11Context) FindCertificate(label string, keyID []byte) (*x509.Certi
 	return certificate, nil
 }
 
+// FindMatchedKeyPair locates the certificate equal to recipient and its paired private key via CKA_ID.
+func (c *PKCS11Context) FindMatchedKeyPair(recipient *x509.Certificate) (pkcs11.ObjectHandle, *x509.Certificate, error) {
+	if recipient == nil {
+		return 0, nil, NewPKCS11Error("recipient certificate is required", nil)
+	}
+
+	certs, err := c.listTokenCertificates()
+	if err != nil {
+		return 0, nil, err
+	}
+
+	for _, entry := range certs {
+		if !bytesEqual(entry.cert.Raw, recipient.Raw) {
+			continue
+		}
+		keyHandle, err := c.findPrivateKeyByID(entry.keyID)
+		if err != nil {
+			return 0, nil, err
+		}
+		return keyHandle, entry.cert, nil
+	}
+
+	return 0, nil, NewPKCS11Error("no matching certificate and private key found on token", nil)
+}
+
+type tokenCertificate struct {
+	cert  *x509.Certificate
+	keyID []byte
+}
+
+func (c *PKCS11Context) listTokenCertificates() ([]tokenCertificate, error) {
+	attributes := []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_CERTIFICATE),
+		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
+	}
+
+	if err := c.ctx.FindObjectsInit(c.session, attributes); err != nil {
+		return nil, NewPKCS11Error("failed to initialize certificate search", err)
+	}
+	defer func() { _ = c.ctx.FindObjectsFinal(c.session) }()
+
+	var out []tokenCertificate
+	for {
+		objects, _, err := c.ctx.FindObjects(c.session, 16)
+		if err != nil {
+			return nil, NewPKCS11Error("failed to find certificates", err)
+		}
+		if len(objects) == 0 {
+			break
+		}
+		for _, handle := range objects {
+			attrs, err := c.ctx.GetAttributeValue(c.session, handle, []*pkcs11.Attribute{
+				pkcs11.NewAttribute(pkcs11.CKA_VALUE, nil),
+				pkcs11.NewAttribute(pkcs11.CKA_ID, nil),
+			})
+			if err != nil {
+				continue
+			}
+			var certBytes, keyID []byte
+			for _, attr := range attrs {
+				switch attr.Type {
+				case pkcs11.CKA_VALUE:
+					certBytes = attr.Value
+				case pkcs11.CKA_ID:
+					keyID = append([]byte(nil), attr.Value...)
+				}
+			}
+			if len(certBytes) == 0 {
+				continue
+			}
+			certificate, err := cert.ParseCertificate(certBytes)
+			if err != nil {
+				continue
+			}
+			out = append(out, tokenCertificate{cert: certificate, keyID: keyID})
+		}
+	}
+	return out, nil
+}
+
+func (c *PKCS11Context) findPrivateKeyByID(keyID []byte) (pkcs11.ObjectHandle, error) {
+	if len(keyID) == 0 {
+		return 0, NewPKCS11Error("matching certificate has no CKA_ID", nil)
+	}
+	attributes := []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PRIVATE_KEY),
+		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
+		pkcs11.NewAttribute(pkcs11.CKA_PRIVATE, true),
+	}
+	if len(keyID) > 0 {
+		attributes = append(attributes, pkcs11.NewAttribute(pkcs11.CKA_ID, keyID))
+	}
+
+	if err := c.ctx.FindObjectsInit(c.session, attributes); err != nil {
+		return 0, NewPKCS11Error("failed to initialize private key search", err)
+	}
+	objects, _, err := c.ctx.FindObjects(c.session, 2)
+	finalErr := c.ctx.FindObjectsFinal(c.session)
+	if err != nil {
+		return 0, NewPKCS11Error("failed to find private key", err)
+	}
+	if finalErr != nil {
+		return 0, NewPKCS11Error("failed to finalize private key search", finalErr)
+	}
+	if len(objects) != 1 {
+		return 0, NewPKCS11Error("expected exactly one private key for certificate CKA_ID", nil)
+	}
+	return objects[0], nil
+}
+
+func bytesEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // DecryptRSA decrypts data using an RSA private key on the token
 func (c *PKCS11Context) DecryptRSA(keyHandle pkcs11.ObjectHandle, encryptedData []byte) ([]byte, error) {
 	// Use PKCS#11 C_Decrypt operation
@@ -237,15 +360,8 @@ func (c *PKCS11Context) DecryptRSA(keyHandle pkcs11.ObjectHandle, encryptedData 
 }
 
 // DecryptEC performs ECDH key agreement and derives a key for EC decryption
-// Note: PKCS#11 ECDH key derivation is complex. For now, we'll extract the private key
-// and perform the key agreement in software. This is a limitation, but many tokens
-// don't support C_DeriveKey for ECDH properly.
+// The private key stays on the token; only the derived session secret is exported.
 func (c *PKCS11Context) DecryptEC(keyHandle pkcs11.ObjectHandle, ephemeralPublicKey *ecdsa.PublicKey) ([]byte, error) {
-	// EC decryption via PKCS#11 is complex and varies by token implementation
-	// Some tokens don't allow reading private key values directly
-	// ECDH key derivation should use C_DeriveKey, but implementation varies
-	// For now, return an error indicating EC support needs token-specific implementation
-
 	// Verify this is an EC key
 	attributes := []*pkcs11.Attribute{
 		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, nil),
@@ -268,10 +384,68 @@ func (c *PKCS11Context) DecryptEC(keyHandle pkcs11.ObjectHandle, ephemeralPublic
 		return nil, NewPKCS11Error("key is not an EC key", nil)
 	}
 
-	// Return error indicating EC support needs token-specific implementation
-	return nil, NewPKCS11Error(
-		"EC key agreement via PKCS#11 requires token-specific implementation. "+
-			"Consider using software key extraction if token allows, or implement C_DeriveKey-based ECDH",
-		nil,
-	)
+	publicPoint, secretLen, err := encodeECDHPublicPoint(ephemeralPublicKey)
+	if err != nil {
+		return nil, err
+	}
+
+	params := pkcs11.NewECDH1DeriveParams(pkcs11.CKD_NULL, nil, publicPoint)
+	mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_ECDH1_DERIVE, params)}
+	template := []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_SECRET_KEY),
+		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_GENERIC_SECRET),
+		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, false),
+		pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, false),
+		pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, true),
+		pkcs11.NewAttribute(pkcs11.CKA_VALUE_LEN, secretLen),
+	}
+
+	derivedHandle, err := c.ctx.DeriveKey(c.session, mech, keyHandle, template)
+	if err != nil {
+		return nil, NewPKCS11Error("failed to derive EC shared secret", err)
+	}
+	defer func() { _ = c.ctx.DestroyObject(c.session, derivedHandle) }()
+
+	derivedAttrs, err := c.ctx.GetAttributeValue(c.session, derivedHandle, []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_VALUE, nil),
+	})
+	if err != nil {
+		return nil, NewPKCS11Error("failed to read derived EC shared secret", err)
+	}
+	if len(derivedAttrs) == 0 || len(derivedAttrs[0].Value) == 0 {
+		return nil, NewPKCS11Error("derived EC shared secret is empty", nil)
+	}
+
+	defer clear(derivedAttrs[0].Value)
+	return leftPadSecret(derivedAttrs[0].Value, secretLen), nil
+}
+
+func encodeECDHPublicPoint(pub *ecdsa.PublicKey) ([]byte, int, error) {
+	if pub == nil || pub.Curve == nil || pub.X == nil || pub.Y == nil {
+		return nil, 0, NewPKCS11Error("EC peer public key is incomplete", nil)
+	}
+	if !pub.Curve.IsOnCurve(pub.X, pub.Y) {
+		return nil, 0, NewPKCS11Error("EC peer public key is not on curve", nil)
+	}
+	secretLen := (pub.Curve.Params().BitSize + 7) / 8
+	if secretLen <= 0 {
+		return nil, 0, NewPKCS11Error("unsupported EC curve", nil)
+	}
+	return elliptic.Marshal(pub.Curve, pub.X, pub.Y), secretLen, nil
+}
+
+func leftPadSecret(secret []byte, size int) []byte {
+	if len(secret) == size {
+		out := make([]byte, len(secret))
+		copy(out, secret)
+		return out
+	}
+	if len(secret) > size {
+		out := make([]byte, size)
+		copy(out, secret[len(secret)-size:])
+		return out
+	}
+	out := make([]byte, size)
+	copy(out[size-len(secret):], secret)
+	return out
 }

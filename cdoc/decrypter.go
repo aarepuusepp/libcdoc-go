@@ -554,12 +554,12 @@ func (d *Decrypter) decryptTransportKeyWithToken(recipient xmlenc.Recipient) ([]
 		if err != nil {
 			return nil, internal.NewDecryptionError("failed to get encrypted key", err)
 		}
-		return d.token.DecryptEC(
-			ephemeralKey,
+		return decryptECWithDigest(
+			d.token, ephemeralKey,
 			r.GetAlgorithmID(),
 			r.GetPartyUInfo(),
 			r.GetPartyVInfo(),
-			encryptedKey,
+			encryptedKey, r.GetDigestAlgorithm(),
 		)
 	default:
 		return nil, internal.NewDecryptionError("unsupported recipient type", nil)

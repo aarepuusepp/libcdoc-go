@@ -31,7 +31,7 @@ func (t *PKCS11Token) DecryptRSA(encryptedKey []byte) ([]byte, error) {
 	return nil, internal.NewDecryptionError("PKCS#11 support requires CGO-enabled build", nil)
 }
 
-func (t *PKCS11Token) DecryptEC(ephemeralPublicKey *ecdsa.PublicKey, algorithmID []byte, partyUInfo []byte, partyVInfo []byte, encryptedKey []byte) ([]byte, error) {
+func (t *PKCS11Token) DecryptECWithDigest(ephemeralPublicKey *ecdsa.PublicKey, algorithmID []byte, partyUInfo []byte, partyVInfo []byte, encryptedKey []byte, digestURI string) ([]byte, error) {
 	return nil, internal.NewDecryptionError("PKCS#11 support requires CGO-enabled build", nil)
 }
 
@@ -39,3 +39,6 @@ func (t *PKCS11Token) DecryptECSharedSecret(ephemeralPublicKey *ecdsa.PublicKey)
 	return nil, internal.NewDecryptionError("PKCS#11 support requires CGO-enabled build", nil)
 }
 
+func (t *PKCS11Token) DecryptEC(ephemeralPublicKey *ecdsa.PublicKey, algorithmID, partyUInfo, partyVInfo, encryptedKey []byte) ([]byte, error) {
+	return t.DecryptECWithDigest(ephemeralPublicKey, algorithmID, partyUInfo, partyVInfo, encryptedKey, "")
+}

@@ -43,8 +43,8 @@ func (t *PKCS12Token) DecryptRSA(encryptedKey []byte) ([]byte, error) {
 	return crypto.DecryptRSA(encryptedKey, privKey)
 }
 
-// DecryptEC performs ECDH key agreement and decrypts an EC-encrypted transport key
-func (t *PKCS12Token) DecryptEC(ephemeralPublicKey *ecdsa.PublicKey, algorithmID []byte, partyUInfo []byte, partyVInfo []byte, encryptedKey []byte) ([]byte, error) {
+// DecryptECWithDigest performs ECDH and unwrap using the specified ConcatKDF digest.
+func (t *PKCS12Token) DecryptECWithDigest(ephemeralPublicKey *ecdsa.PublicKey, algorithmID []byte, partyUInfo []byte, partyVInfo []byte, encryptedKey []byte, digestURI string) ([]byte, error) {
 	if t.keyEntry == nil || t.keyEntry.PrivateKey == nil {
 		return nil, internal.NewDecryptionError("no private key in PKCS#12 token", nil)
 	}
@@ -60,17 +60,23 @@ func (t *PKCS12Token) DecryptEC(ephemeralPublicKey *ecdsa.PublicKey, algorithmID
 		return nil, internal.NewDecryptionError("failed ECDH key agreement", err)
 	}
 
-	// Derive wrap key via ConcatKDF
-	wrapKey, err := crypto.ConcatKDF(
+	defer clear(sharedSecret)
+	if digestURI == "" {
+		digestURI = crypto.DigestSHA384URI
+	}
+	wrapKey, err := crypto.ConcatKDFWithDigest(
 		sharedSecret,
 		algorithmID,
 		partyUInfo,
 		partyVInfo,
+		digestURI,
+		32,
 	)
 	if err != nil {
 		return nil, internal.NewDecryptionError("failed ConcatKDF", err)
 	}
 
+	defer clear(wrapKey)
 	// Unwrap transport key using AES-KW-256
 	dataKey, err := crypto.UnwrapAES256(encryptedKey, wrapKey)
 	if err != nil {
@@ -80,3 +86,18 @@ func (t *PKCS12Token) DecryptEC(ephemeralPublicKey *ecdsa.PublicKey, algorithmID
 	return dataKey, nil
 }
 
+// DecryptECSharedSecret performs ECDH key agreement for CDOC2 inline ECC locks.
+func (t *PKCS12Token) DecryptECSharedSecret(ephemeralPublicKey *ecdsa.PublicKey) ([]byte, error) {
+	if t.keyEntry == nil || t.keyEntry.PrivateKey == nil {
+		return nil, internal.NewDecryptionError("no private key in PKCS#12 token", nil)
+	}
+	privKey, ok := t.keyEntry.PrivateKey.ECPrivateKey()
+	if !ok {
+		return nil, internal.NewDecryptionError("private key is not EC", nil)
+	}
+	return crypto.ECDHKeyAgreement(privKey, ephemeralPublicKey)
+}
+
+func (t *PKCS12Token) DecryptEC(ephemeralPublicKey *ecdsa.PublicKey, algorithmID, partyUInfo, partyVInfo, encryptedKey []byte) ([]byte, error) {
+	return t.DecryptECWithDigest(ephemeralPublicKey, algorithmID, partyUInfo, partyVInfo, encryptedKey, "")
+}
