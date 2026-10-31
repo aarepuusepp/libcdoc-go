@@ -7,14 +7,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	libcdoc "github.com/aarepuusepp/libcdoc-go/v2"
 	"github.com/aarepuusepp/libcdoc-go/v2/cdoc"
 	"github.com/aarepuusepp/libcdoc-go/v2/cert"
 	"github.com/aarepuusepp/libcdoc-go/v2/key"
 )
 
 const (
-	version = "2.0.0"
-	usage   = `cdoc - CDOC Encryption/Decryption Tool (libcdoc-go)
+	usage = `cdoc - CDOC Encryption/Decryption Tool (libcdoc-go)
 
 A command-line tool from libcdoc-go library for encrypting and decrypting
 CDOC documents supporting CDOC 1.0, 1.1, and 2.0 formats.
@@ -60,7 +60,7 @@ func main() {
 	case "decrypt", "d":
 		runDecrypt(os.Args[2:])
 	case "version", "-v", "--version":
-		fmt.Printf("cdoc version %s (libcdoc-go)\n", version)
+		fmt.Printf("cdoc version %s (libcdoc-go)\n", libcdoc.Version)
 		os.Exit(0)
 	case "help", "-h", "--help":
 		printUsage()

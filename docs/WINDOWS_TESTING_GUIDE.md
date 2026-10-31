@@ -27,5 +27,5 @@ Temporary workspaces/replacements belong to local development only; verify relea
 with GOWORK=off and the published version. Never commit local module overrides.
 
 CLI tools have separate go.mod files. Enter cli-tools/cdoc-cli or cli-tools/cdoc-test
-before building/running them and review their source-checkout replace directives.
+before building/running them. Consumers pin published v2.0.8 without a local replace.
 They are developer utilities, not EID-PD installed runtime components.

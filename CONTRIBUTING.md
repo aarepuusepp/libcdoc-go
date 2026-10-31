@@ -18,3 +18,12 @@ fixture provenance and licenses. Do not commit local secrets, PIN/CAN or user CD
 [Windows setup](docs/WINDOWS_TESTING_GUIDE.md), [publishing](docs/PUBLISHING.md).
 Preserve the paired Digisign CDOC2 contract lock and external proof-profile blockers.
 Mock-only results do not establish live RIA interoperability.
+
+## Nested CLI validation
+
+Run `pwsh -File cli-tools/Test-Modules.ps1` from this repository. The three
+nested modules use Go 1.27.3; the two consumers pin published libcdoc-go v2.0.8
+without local replacements. The dedicated CI job verifies/tests/vets/builds each
+and checks an isolated multi-file roundtrip plus wrong-key rejection. The root
+`go test ./...` alone does not enter nested Go modules. CLI --version reports
+the linked library's embedded version rather than a stale CLI constant.

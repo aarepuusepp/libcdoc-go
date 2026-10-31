@@ -38,25 +38,21 @@ This example performs 16 complete test scenarios:
 
 ## Setup
 
-### Option 1: Using Local Path Replacement
+Use Go 1.27.3+. This nested module requires published libcdoc-go/v2 v2.0.8;
+no local replace/workspace is needed. From cli-tools/cdoc-test run:
 
-1. Navigate to the test directory:
-```bash
-cd cli-tools/cdoc-test
+```sh
+go mod verify
+go test -mod=readonly ./...
+go vet -mod=readonly ./...
+go build -mod=readonly .
 ```
 
-2. The `go.mod` file can be configured for local development as follows (the checked-in nested module retains older metadata and a local replace):
-```go
-module cdoc-test
-
-go 1.27.3
-
-require github.com/aarepuusepp/libcdoc-go/v2 v2.0.8
-
-replace github.com/aarepuusepp/libcdoc-go/v2 => ../../
-```
-
-3. Run `go mod tidy` to ensure dependencies are correct
+The example application's synthetic fixture paths are relative to this directory.
+It writes example output here; use a disposable checkout for running the full demo.
+For automated isolated checks use `pwsh -File cli-tools/Test-Modules.ps1` from
+the repository root. That gate tests/builds all three modules, checks CLI version,
+compares a multi-file/unicode CDOC2 roundtrip and requires wrong-key rejection.
 
 ## Running the Test
 

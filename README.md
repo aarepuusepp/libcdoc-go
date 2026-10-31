@@ -107,3 +107,12 @@ See [publishing](docs/PUBLISHING.md). VERSION is the source of runtime version.
 Existing release tags are immutable; documentation updates do not move them.
 
 MIT license: [LICENSE](LICENSE).
+
+## Nested CLI validation
+
+Run `pwsh -File cli-tools/Test-Modules.ps1` from this repository. The three
+nested modules use Go 1.27.3; the two consumers pin published libcdoc-go v2.0.8
+without local replacements. The dedicated CI job verifies/tests/vets/builds each
+and checks an isolated multi-file roundtrip plus wrong-key rejection. The root
+`go test ./...` alone does not enter nested Go modules. CLI --version reports
+the linked library's embedded version rather than a stale CLI constant.

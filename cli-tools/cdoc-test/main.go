@@ -23,7 +23,8 @@ const (
 
 func main() {
 	fmt.Println("=== libcdoc-go Test Application ===")
-	fmt.Println("Testing CDOC 1.1 and 2.0 encryption and decryption with test data\n")
+	fmt.Println("Testing CDOC 1.1 and 2.0 encryption and decryption with test data")
+	fmt.Println()
 
 	// Verify test files exist
 	if err := verifyTestFiles(); err != nil {
@@ -242,7 +243,8 @@ func verifyTestFiles() error {
 			return fmt.Errorf("test file not found: %s", file)
 		}
 	}
-	fmt.Println("✓ All test files verified\n")
+	fmt.Println("✓ All test files verified")
+	fmt.Println()
 	return nil
 }
 

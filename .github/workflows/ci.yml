@@ -75,3 +75,17 @@ jobs:
       run: |
         go test -fuzz=FuzzValidateBaseURL -fuzztime=10s ./cdoc/cdoc2/riahttp/...
 
+
+  cli:
+    runs-on: ubuntu-24.04
+    env:
+      GOWORK: "off"
+      CGO_ENABLED: "0"
+    steps:
+    - uses: actions/checkout@v7.0.1
+    - uses: actions/setup-go@v7.0.0
+      with:
+        go-version-file: go.mod
+    - name: Verify nested modules and CLI encryption roundtrip
+      shell: pwsh
+      run: ./cli-tools/Test-Modules.ps1

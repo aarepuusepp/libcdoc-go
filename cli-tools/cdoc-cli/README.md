@@ -18,8 +18,8 @@ cd cli-tools/cdoc-cli
 go build -o cdoc.exe .
 ```
 
-This is a separate source-checkout module with a replace to the repository root.
-Use Go 1.27.3+ and build from this directory. The root v2.0.8 module tag does not
+This is a separate module requiring published libcdoc-go/v2 v2.0.8 without a local replace.
+Use Go 1.27.3+ and build from this directory. The root module tag does not
 publish a separately versioned CLI module; do not assume go install @latest will
 resolve this nested module as the current root release.
 
@@ -141,3 +141,13 @@ cdoc decrypt -f secret.cdoc -k my_private_key.pem -o ./decrypted_files/
 - File name collisions during decryption are handled automatically (appends `_1`, `_2`, etc.)
 - The tool is compatible with CDOC files created by `cdoc4j`
 - For multi-recipient CDOCs, provide the certificate matching your private key using `-c` flag
+
+## Automated module and CLI checks
+
+Run `pwsh -File cli-tools/Test-Modules.ps1` from the repository root. It tests,
+vets and builds all three nested modules without updating manifests, checks
+CLI --version against the linked release and verifies a two-file/unicode CDOC2
+roundtrip plus wrong-key rejection in a temporary directory. Public synthetic
+symmetric keys are used only by this test. Real PIN/password command-line options
+can be visible to local process inspection; prefer EID-PD native PIN entry for
+browser card operations.
