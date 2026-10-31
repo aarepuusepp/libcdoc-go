@@ -11,11 +11,15 @@ alwaysApply: true
 - These rules cover both general, language-agnostic principles and specific requirements for web applications/servers
 - Based on industry standards including OWASP ASVS and security best practices
 
+## CFR (e-gov) source
+
+Rules aligned with [Konsolideeritud mittefunktsionaalsed nõuded](https://github.com/e-gov/cfr-dev/blob/main/cfr.md) are prefixed with **🏛️ CFR** (`§x.y`). Nõudetase: `(required)` | `(expected)` | `(recommended)`.
+
 ## Requirements
 
 ### Input Validation and Output Handling
 
-- **Input Validation:**
+- **🏛️ CFR §3.10 (required)** **Input Validation:**
   - Sanitize and validate all external input (user input, API requests, file uploads, environment variables) to prevent injection attacks (SQLi, XSS, XXE, command injection)
   - Use allow-lists for validation rather than block-lists where possible
   - Data selection/database queries must use parameterized queries, ORMs, or equivalent protections
@@ -37,7 +41,7 @@ alwaysApply: true
   - Password input fields must use type=password; allow paste functionality and password managers
   - Verify passwords exactly as received (no truncation or case transformation)
 - **Authentication Mechanisms:**
-  - Use strong, standard authentication mechanisms with multi-factor authentication
+  - **🏛️ CFR §3.15 (required)** Use strong, standard authentication mechanisms with multi-factor authentication; when MFA is required, it applies to administrative functions as well
   - Implement rate limiting and anti-automation controls against credential stuffing and brute force
   - Default accounts (root, admin, sa) must be disabled or removed
   - System-generated passwords must be securely random and expire after short use
@@ -62,7 +66,7 @@ alwaysApply: true
 
 ### Session Management
 
-- **Session Security:**
+- **🏛️ CFR §3.8 (required)** **Session Security:**
   - Session tokens must be dynamically generated with CSPRNG and at least 128 bits entropy
   - Generate new session token on authentication/re-authentication; terminate current session
   - Invalidate sessions server-side on logout, expiration, or account deletion
@@ -75,12 +79,12 @@ alwaysApply: true
 
 ### CSRF Protection
 
-- For cookie-based sessions, require CSRF protection on all state-changing requests (e.g., synchronizer token or double-submit cookie patterns)
+- **🏛️ CFR §3.2 (required)** For cookie-based sessions, require CSRF protection on all state-changing requests (e.g., synchronizer token or double-submit cookie patterns)
 - Use SameSite cookies as defense-in-depth only; do not rely on SameSite alone for CSRF protection
 
 ### Authorization and Access Control
 
-- **Access Control:**
+- **🏛️ CFR §10.2 (expected)** **Access Control:**
   - Apply principle of least privilege for all authorization decisions
   - Verify user authorization for every request accessing private data (prevent IDOR/BOLA)
   - Enforce authorization at trusted service layer, not client-side code
@@ -92,7 +96,7 @@ alwaysApply: true
 
 ### Secrets Management
 
-- **Storage and Handling:**
+- **🏛️ CFR §3.7 (required)** **Storage and Handling:**
   - Use secure secrets management solution (Vault, AWS Secrets Manager, environment variables with proper access control)
   - NEVER hardcode credentials or sensitive keys in source code
   - Secrets must be configured to expire and rotate per documentation
@@ -100,7 +104,7 @@ alwaysApply: true
 
 ### Web Application Security Headers
 
-- **Required Headers:**
+- **🏛️ CFR §3.1 (required)** **Required Headers:**
   - Implement strong `Content-Security-Policy` with object-src 'none', base-uri 'none'; disallow 'unsafe-inline' for scripts and use nonces or hashes for any required inline scripts
   - Use `Strict-Transport-Security` with min 1 year max-age and includeSubDomains
   - Include `X-Content-Type-Options: nosniff` on all responses
@@ -119,13 +123,14 @@ alwaysApply: true
 
 ### Cryptography
 
+- **🏛️ CFR §3.9 (required)** Follow [RIA cryptographic algorithm lifecycle recommendations](https://www.ria.ee/et/riigi-infosusteem/infoturve/kruptograafia.html); plan algorithm upgrades over the application lifecycle
 - **Cryptographic Standards:**
   - Use only approved ciphers and modes (e.g., AES-GCM); avoid insecure block modes (ECB)
   - Use approved hash functions; avoid MD5, SHA-1 for cryptographic purposes
   - Generate random numbers/strings with CSPRNG and at least 128 bits entropy
   - Store passwords using approved, computationally intensive key derivation functions
 - **TLS Configuration:**
-  - Prefer TLS 1.3; support TLS 1.2 only with strong cipher suites; disable weak/deprecated protocols
+  - **🏛️ CFR §3.5 (required)** Prefer TLS 1.3; support TLS 1.2 only with strong cipher suites; disable weak/deprecated protocols
   - External-facing services must use publicly trusted certificates
   - Validate certificates before TLS communication; use trusted certificates for internal services
 
@@ -147,8 +152,8 @@ alwaysApply: true
   - Continue secure operation when external resources fail (circuit breakers)
   - Define "last resort" error handler for unhandled exceptions
 - **Security Logging:**
-  - Log all authentication operations (success/failure) with metadata
-  - Log failed authorization attempts and security control bypass attempts
+  - **🏛️ CFR §5.1 (required)** Log all authentication operations (success/failure) with metadata
+  - **🏛️ CFR §5.2 (required)** Log failed authorization attempts and security control bypass attempts
   - Include necessary metadata (when, where, who, what) for investigation
   - Protect logs from unauthorized access; transmit securely to separate system
   - Encode log data to prevent log injection attacks
@@ -157,7 +162,7 @@ alwaysApply: true
 ### Data Protection
 
 - **Sensitive Data Handling:**
-  - Send sensitive data only in HTTP body/headers, not URLs/query strings
+  - **🏛️ CFR §3.11 (required)** Send sensitive data only in HTTP body/headers, not URLs/query strings
   - Clear authenticated data from client storage after session termination
   - Classify sensitive data and implement appropriate protection controls
   - Use anti-caching headers for sensitive data responses
@@ -166,10 +171,10 @@ alwaysApply: true
 
 ### Dependency and Configuration Management
 
-- **Dependency Security:**
+- **🏛️ CFR §3.3 (required)** **Dependency Security:**
   - Regularly scan dependencies for vulnerabilities (OWASP Dependency-Check, npm audit)
   - Keep dependencies up-to-date with documented remediation timeframes
-  - Maintain inventory (SBOM) of third-party libraries from trusted sources
+  - **🏛️ CFR §3.4 (required)** Maintain inventory (SBOM) of third-party libraries from trusted sources
   - Avoid dependencies for trivial functionality that can be self-implemented
 - **Production Configuration:**
   - Disable debug modes in production environments
@@ -257,15 +262,15 @@ alwaysApply: true
 </example>
 
 ## Critical Rules
-- **Input/Output:** ALWAYS validate and sanitize external input; encode output appropriately for context
+- **🏛️ CFR §3.10 (required)** **Input/Output:** ALWAYS validate and sanitize external input; encode output appropriately for context
 - **Authentication:** NEVER use Implicit Grant OAuth flow; always use Authorization Code with PKCE
-- **Secrets:** NEVER hardcode credentials; use secrets management solutions
-- **Authorization:** ALWAYS verify user permissions for data access (prevent IDOR); apply least privilege
-- **Sessions:** INVALIDATE sessions server-side on logout/timeout; use secure cookies, not browser storage
-- **Headers:** IMPLEMENT CSP, HSTS, secure cookies, and CORS policies for web applications
-- **TLS:** USE only TLS 1.2+ with strong ciphers; validate certificates
-- **Logging:** LOG security events (auth failures, bypass attempts) with sufficient context
-- **Dependencies:** SCAN regularly for vulnerabilities; keep updated with documented timelines
+- **🏛️ CFR §3.7 (required)** **Secrets:** NEVER hardcode credentials; use secrets management solutions
+- **🏛️ CFR §10.2 (expected)** **Authorization:** ALWAYS verify user permissions for data access (prevent IDOR); apply least privilege
+- **🏛️ CFR §3.8 (required)** **Sessions:** INVALIDATE sessions server-side on logout/timeout; use secure cookies, not browser storage
+- **🏛️ CFR §3.1 (required)** **Headers:** IMPLEMENT CSP, HSTS, secure cookies, and CORS policies for web applications
+- **🏛️ CFR §3.5 (required)** **TLS:** USE only TLS 1.2+ with strong ciphers; validate certificates
+- **🏛️ CFR §5.1 (required)** **Logging:** LOG security events (auth failures, bypass attempts) with sufficient context
+- **🏛️ CFR §3.3 (required)** **Dependencies:** SCAN regularly for vulnerabilities; keep updated with documented timelines
 - **Files:** VALIDATE file uploads (type, size, content); scan for malware
 - **Errors:** NEVER expose sensitive data in error messages; fail securely
 - **Tokens:** VALIDATE self-contained tokens; use proper algorithms; enforce expiration

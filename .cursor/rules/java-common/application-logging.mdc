@@ -12,6 +12,7 @@ alwaysApply: true
 - This rule complements, but does not replace, `mdc:rules/java-common/audit-logging.mdc`, which covers specific security audit events. General principles here (like forbidden data) apply unless overridden by the audit rule.
 - For comprehensive security best practices, see `[security.mdc](mdc:rules/common/security.mdc)`.
 - The goal is consistent, informative, and secure application-level logging in a structured JSON format suitable for log aggregation systems (like ELK stack).
+- **🏛️ CFR §5.3 (required)** Logging must be structured (JSON); field layout should align with OpenTelemetry or ECS where applicable.
 
 ## Requirements
 

@@ -1,7 +1,7 @@
 ---
-description: 
-globs: 
-alwaysApply: true
+description: RETIRED — restaurant implementation plan; use common/cdoc2-mandatory-context.mdc
+globs:
+alwaysApply: false
 ---
 # Project Context and Implementation Plan Usage
 

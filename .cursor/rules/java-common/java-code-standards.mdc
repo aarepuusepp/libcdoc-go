@@ -80,6 +80,8 @@ private OperationStatus status;
     - Inner classes
 
 2. **Import Organization**:
+    - Always use regular `import` statements at the top of the file for Java.
+    - NEVER use fully qualified inline class names (e.g., `com.example.package.MyClass` or `@com.example.package.MyAnnotation`) directly in the code.
     - Java core libraries
     - Third-party libraries
     - Project-specific imports
@@ -111,9 +113,8 @@ private OperationStatus status;
 1. **Code Structure**:
     - One class per file
     - Class name matches file name
-    - Maximum file length: 400 lines
-    - Maximum method length: 30 lines
-    - Maximum class length: 300 lines
+    - Maximum file length: 750 lines (SonarQube `java:S104`; one class per file is the norm)
+    - Maximum method length: 30 lines (SonarQube `java:S138`)
 
 2. **Error Handling**:
     - Use specific exceptions
@@ -286,3 +287,4 @@ String item = typedList.get(0); // Safe access
 9. No compiler warnings, checkstyle violations, or SonarQube issues
 10. Prefer modern Java 21+ features (records, pattern matching, virtual threads) where they add clarity or performance
 11. Handle `null` explicitly in `switch` pattern matching on reference types
+12. NEVER use fully qualified inline class names directly in the code; always use regular import statements at the top of the file.
