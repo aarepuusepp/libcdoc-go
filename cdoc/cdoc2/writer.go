@@ -238,7 +238,13 @@ func (w *Writer) buildHeaderData() ([]byte, error) {
 				// XOR FMK
 				xor = XOREncrypt(w.fmk, kek)
 				// Encrypt KEK with RSA PKCS#1 v1.5 (this is the key material)
-				enc, err := crypto.EncryptRSA(kek, r.Certificate)
+				var enc []byte
+				var err error
+				if r.ServerID != "" {
+					enc, err = crypto.EncryptRSA(kek, r.Certificate)
+				} else {
+					enc, err = crypto.EncryptRSAOAEP(kek, pub)
+				}
 				if err != nil {
 					return nil, err
 				}
@@ -277,7 +283,7 @@ func (w *Writer) buildHeaderData() ([]byte, error) {
 					rc := rcpt.RSAPublicKeyCapsuleStart
 					rv := rcpt.RSAPublicKeyCapsuleEnd
 
-					pkVec := b.CreateByteVector(r.Certificate.RawSubjectPublicKeyInfo)
+					pkVec := b.CreateByteVector(x509.MarshalPKCS1PublicKey(pub))
 					encVec := b.CreateByteVector(enc)
 					rc(b)
 					rp(b, pkVec)
@@ -307,8 +313,7 @@ func (w *Writer) buildHeaderData() ([]byte, error) {
 				if err != nil {
 					return nil, err
 				}
-				// kekPm and kek via SHA-512 HKDF
-				kekPm := crypto.HKDFExtractSHA512([]byte(KEKPREMASTER), shared)
+				// Use the exact public-key encodings below for key derivation.
 				// Recipient and sender key materials (DER SubjectPublicKeyInfo)
 				rcptDER := r.Certificate.RawSubjectPublicKeyInfo
 				senderDER, err := x509.MarshalPKIXPublicKey(&eph.PublicKey)
@@ -336,8 +341,21 @@ func (w *Writer) buildHeaderData() ([]byte, error) {
 					}
 				}
 
-				info := []byte(GetSaltForExpandWithKeyMaterial(kdfRecipientKey, senderDER))
-				kek, err := crypto.HKDFExpandSHA512(kekPm, info, KeyLen)
+				// Local CDOC2 uses TLS point encodings and HKDF-SHA256.
+				if r.ServerID == "" {
+					enc, e := EncodeECKeyServerRecipient(pub)
+					if e != nil {
+						return nil, e
+					}
+					sender, e := EncodeECKeyServerRecipient(&eph.PublicKey)
+					if e != nil {
+						return nil, e
+					}
+					rcptDER, senderDER = enc.TLSPoint, sender.TLSPoint
+					kdfRecipientKey, eccFBCurve = rcptDER, enc.FBCurve
+				}
+				defer clear(shared)
+				kek, err := DeriveInlineECCKEK(shared, kdfRecipientKey, senderDER)
 				if err != nil {
 					return nil, err
 				}
@@ -378,7 +396,7 @@ func (w *Writer) buildHeaderData() ([]byte, error) {
 					rc := rcpt.ECCPublicKeyCapsuleStart
 					rv := rcpt.ECCPublicKeyCapsuleEnd
 					rc(b)
-					rcpt.ECCPublicKeyCapsuleAddCurve(b, rcpt.EllipticCurvesecp384r1)
+					rcpt.ECCPublicKeyCapsuleAddCurve(b, eccFBCurve)
 					rcpt.ECCPublicKeyCapsuleAddRecipientPublicKey(b, rcptVec)
 					rcpt.ECCPublicKeyCapsuleAddSenderPublicKey(b, senderVec)
 					capOff := rv(b)

@@ -1,12 +1,12 @@
 package cert
 
 import (
-	"testing"
-	"crypto/x509"
-	"crypto/rsa"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"testing"
 )
 
 func TestValidateKeyUsage_RSA_KeyEncipherment(t *testing.T) {
@@ -130,4 +130,3 @@ func TestValidateRecipientCertificate_EC(t *testing.T) {
 		t.Errorf("ValidateRecipientCertificate() for valid EC cert should not fail: %v", err)
 	}
 }
-

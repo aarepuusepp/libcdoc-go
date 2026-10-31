@@ -1,16 +1,16 @@
 package cert
 
 import (
-	"testing"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"testing"
 )
 
 func TestExtractCN(t *testing.T) {
 	// Create a test certificate with CN
 	subject := pkix.Name{
-		CommonName: "TEST USER",
-		Country:    []string{"EE"},
+		CommonName:   "TEST USER",
+		Country:      []string{"EE"},
 		Organization: []string{"TEST ORG"},
 	}
 
@@ -26,7 +26,7 @@ func TestExtractCN(t *testing.T) {
 
 func TestExtractCN_NoCN(t *testing.T) {
 	subject := pkix.Name{
-		Country:    []string{"EE"},
+		Country:      []string{"EE"},
 		Organization: []string{"TEST ORG"},
 	}
 
@@ -42,8 +42,8 @@ func TestExtractCN_NoCN(t *testing.T) {
 
 func TestFormatDN(t *testing.T) {
 	subject := pkix.Name{
-		CommonName: "TEST USER",
-		Country:    []string{"EE"},
+		CommonName:   "TEST USER",
+		Country:      []string{"EE"},
 		Organization: []string{"TEST ORG"},
 	}
 
@@ -57,4 +57,3 @@ func TestFormatDN(t *testing.T) {
 		t.Error("FormatDN() result seems too short")
 	}
 }
-

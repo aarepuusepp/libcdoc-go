@@ -449,3 +449,20 @@ func leftPadSecret(secret []byte, size int) []byte {
 	copy(out[size-len(secret):], secret)
 	return out
 }
+
+func (c *PKCS11Context) DecryptRSAOAEP(keyHandle pkcs11.ObjectHandle, encryptedData []byte) ([]byte, error) {
+	// Use PKCS#11 C_Decrypt operation
+	mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS_OAEP, pkcs11.NewOAEPParams(pkcs11.CKM_SHA256, pkcs11.CKG_MGF1_SHA256, pkcs11.CKZ_DATA_SPECIFIED, nil))}
+
+	err := c.ctx.DecryptInit(c.session, mech, keyHandle)
+	if err != nil {
+		return nil, NewPKCS11Error("failed to initialize RSA decryption", err)
+	}
+
+	decrypted, err := c.ctx.Decrypt(c.session, encryptedData)
+	if err != nil {
+		return nil, NewPKCS11Error("failed to decrypt with RSA key", err)
+	}
+
+	return decrypted, nil
+}

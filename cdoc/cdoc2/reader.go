@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"compress/zlib"
 	"crypto/ecdsa"
 	"crypto/rsa"
 	"io"
@@ -273,7 +274,7 @@ func (r *Reader) BeginDecryption(fmk []byte) error {
 		return internal.NewDecryptionError("failed to decrypt payload", err)
 	}
 
-	// Decompress if needed (CDOC2 uses gzip compression)
+	// Decompress if needed (CDOC2 uses zlib; legacy Go gzip is also accepted)
 	decompressedPayload, err := decompressGzip(decryptedPayload)
 	if err != nil {
 		return internal.NewDecryptionError("failed to decompress payload", err)
@@ -375,6 +376,25 @@ func decompressGzip(data []byte) ([]byte, error) {
 		return out, nil
 	}
 
-	// Not compressed, return as-is
+	// Zlib is the standard CDOC2 payload format (RFC1950).
+	if len(data) >= 2 && data[0]&0x0f == 8 && (int(data[0])*256+int(data[1]))%31 == 0 {
+		reader, err := zlib.NewReader(bytes.NewReader(data))
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = reader.Close() }()
+		out, err := io.ReadAll(io.LimitReader(reader, int64(maxDecompressedGzipBytes)+1))
+		if err != nil {
+			return nil, err
+		}
+		if len(out) > maxDecompressedGzipBytes {
+			return nil, internal.NewParseError("decompressed payload exceeds limit", nil)
+		}
+		return out, nil
+	}
+	// Historical Go releases also accepted raw tar payloads.
+	if len(data) > maxDecompressedGzipBytes {
+		return nil, internal.NewParseError("decompressed payload exceeds limit", nil)
+	}
 	return data, nil
 }

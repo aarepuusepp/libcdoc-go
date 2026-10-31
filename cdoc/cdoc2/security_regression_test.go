@@ -3,6 +3,7 @@ package cdoc2
 import (
 	"bytes"
 	"compress/gzip"
+	"compress/zlib"
 	"io"
 	"strings"
 	"testing"
@@ -74,4 +75,24 @@ func (zeroReader) Read(p []byte) (int, error) {
 		p[i] = 0
 	}
 	return len(p), nil
+}
+
+func TestDecompressZlibLimit(t *testing.T) {
+	prev := maxDecompressedGzipBytes
+	maxDecompressedGzipBytes = 4096
+	t.Cleanup(func() { maxDecompressedGzipBytes = prev })
+	for _, size := range []int{100, 8192} {
+		var b bytes.Buffer
+		z := zlib.NewWriter(&b)
+		_, _ = z.Write(bytes.Repeat([]byte{0}, size))
+		_ = z.Close()
+		out, err := decompressGzip(b.Bytes())
+		if size > 4096 {
+			if err == nil {
+				t.Fatal("accepted zlib expansion bomb")
+			}
+		} else if err != nil || len(out) != size {
+			t.Fatal("zlib decode failed", err)
+		}
+	}
 }

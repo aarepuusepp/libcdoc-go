@@ -3,6 +3,7 @@ package crypto
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 )
@@ -38,4 +39,12 @@ func DecryptRSA(encrypted []byte, privKey *rsa.PrivateKey) ([]byte, error) {
 	}
 
 	return decrypted, nil
+}
+
+// EncryptRSAOAEP implements CDOC2 RSA-OAEP with SHA256, MGF1-SHA256 and empty label.
+func EncryptRSAOAEP(data []byte, pub *rsa.PublicKey) ([]byte, error) {
+	return rsa.EncryptOAEP(sha256.New(), rand.Reader, pub, data, nil)
+}
+func DecryptRSAOAEP(data []byte, priv *rsa.PrivateKey) ([]byte, error) {
+	return rsa.DecryptOAEP(sha256.New(), rand.Reader, priv, data, nil)
 }

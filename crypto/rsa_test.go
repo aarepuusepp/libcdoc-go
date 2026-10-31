@@ -23,10 +23,10 @@ func createTestRSACertificate(t *testing.T) *x509.Certificate {
 		Subject: pkix.Name{
 			CommonName: "Test User",
 		},
-		NotBefore:    time.Now(),
-		NotAfter:     time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:     x509.KeyUsageKeyEncipherment,
-		PublicKey:    privKey.Public(),
+		NotBefore: time.Now(),
+		NotAfter:  time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:  x509.KeyUsageKeyEncipherment,
+		PublicKey: privKey.Public(),
 	}
 
 	// Self-sign for testing
@@ -123,4 +123,3 @@ func TestDecryptRSA_InvalidCiphertext(t *testing.T) {
 		})
 	}
 }
-

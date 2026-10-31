@@ -43,11 +43,11 @@ func EncodeECKeyServerRecipient(pub *ecdsa.PublicKey) (ECKeyServerEncoding, erro
 func ecKeyServerCurveMeta(curve elliptic.Curve) (coordLen int, capsuleType string, fbCurve rcpt.EllipticCurve, err error) {
 	switch curve {
 	case elliptic.P256():
-		return 32, "ecc_secp256r1", rcpt.EllipticCurveUNKNOWN, nil
+		return 32, "ecc_secp256r1", rcpt.EllipticCurvesecp256r1, nil
 	case elliptic.P384():
 		return 48, "ecc_secp384r1", rcpt.EllipticCurvesecp384r1, nil
 	case elliptic.P521():
-		return 66, "ecc_secp521r1", rcpt.EllipticCurveUNKNOWN, nil
+		return 66, "ecc_secp521r1", rcpt.EllipticCurvesecp521r1, nil
 	default:
 		return 0, "", rcpt.EllipticCurveUNKNOWN, internal.NewEncryptionError(
 			fmt.Sprintf("unsupported EC curve for key server: %T", curve), nil)

@@ -274,6 +274,7 @@ func prepareClientUnwrapCDOC2(cdocBytes []byte, recipientCert *x509.Certificate)
 	case matched.IsRSA():
 		challenge.RecipientType = "RSA"
 		challenge.EncryptedKeyB64 = base64.StdEncoding.EncodeToString(matched.KeyMaterial)
+		challenge.RecipientKeyB64 = base64.StdEncoding.EncodeToString(matched.RecipientKey)
 	case matched.IsECC():
 		challenge.RecipientType = "EC"
 		challenge.EphemeralPublicKeyB64 = base64.StdEncoding.EncodeToString(matched.KeyMaterial)

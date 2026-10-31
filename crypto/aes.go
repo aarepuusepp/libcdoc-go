@@ -3,8 +3,8 @@ package crypto
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"io"
 	"github.com/aarepuusepp/libcdoc-go/v2/internal"
+	"io"
 )
 
 // EncryptAESGCM encrypts data using AES-256-GCM

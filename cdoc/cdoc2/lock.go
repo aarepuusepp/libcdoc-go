@@ -141,7 +141,7 @@ func (l *Lock) MatchesCertificate(cert *x509.Certificate) (bool, error) {
 func extractPublicKeyBytesForLock(l *Lock, cert *x509.Certificate) ([]byte, error) {
 	switch pubKey := cert.PublicKey.(type) {
 	case *ecdsa.PublicKey:
-		if l != nil && l.Type == LockTypePublicKey && l.PKType == PKTypeECC {
+		if l != nil && IsLegacySPKI(l.RecipientKey) {
 			return cert.RawSubjectPublicKeyInfo, nil
 		}
 		enc, err := EncodeECKeyServerRecipient(pubKey)
@@ -150,8 +150,11 @@ func extractPublicKeyBytesForLock(l *Lock, cert *x509.Certificate) ([]byte, erro
 		}
 		return enc.TLSPoint, nil
 	default:
-		if _, ok := cert.PublicKey.(*rsa.PublicKey); ok {
-			return cert.RawSubjectPublicKeyInfo, nil
+		if rsaKey, ok := cert.PublicKey.(*rsa.PublicKey); ok {
+			if l != nil && IsLegacySPKI(l.RecipientKey) {
+				return cert.RawSubjectPublicKeyInfo, nil
+			}
+			return x509.MarshalPKCS1PublicKey(rsaKey), nil
 		}
 		return nil, internal.NewParseError(
 			"unsupported public key type",

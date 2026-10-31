@@ -2,10 +2,8 @@ package cdoc
 
 import (
 	"crypto/ecdsa"
-	"crypto/x509"
 
 	c2 "github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2"
-	"github.com/aarepuusepp/libcdoc-go/v2/crypto"
 	"github.com/aarepuusepp/libcdoc-go/v2/internal"
 	"github.com/aarepuusepp/libcdoc-go/v2/key"
 )
@@ -94,19 +92,30 @@ func unwrapCDOC2TransportKeyWithToken(token Token, challenge ClientUnwrapChallen
 		if err != nil {
 			return nil, err
 		}
-		return token.DecryptRSA(encryptedKey)
-	case "EC":
-		senderDER, err := challenge.ChallengeEphemeralPoint()
+		recipientKey, err := decodeOptionalB64(challenge.RecipientKeyB64)
 		if err != nil {
 			return nil, err
 		}
-		pubAny, err := x509.ParsePKIXPublicKey(senderDER)
-		if err != nil {
-			return nil, internal.NewDecryptionError("invalid ECC sender public key", err)
+		if len(recipientKey) == 0 || c2.IsLegacySPKI(recipientKey) {
+			return token.DecryptRSA(encryptedKey)
 		}
-		ecPub, ok := pubAny.(*ecdsa.PublicKey)
+		oaep, ok := token.(interface{ DecryptRSAOAEP([]byte) ([]byte, error) })
 		if !ok {
-			return nil, internal.NewDecryptionError("sender public key is not ECC", nil)
+			return nil, internal.NewDecryptionError("token does not support RSA-OAEP-SHA256", nil)
+		}
+		return oaep.DecryptRSAOAEP(encryptedKey)
+	case "EC":
+		senderKey, err := challenge.ChallengeEphemeralPoint()
+		if err != nil {
+			return nil, err
+		}
+		ecPub, err := c2.DecodeECCPublicKey(senderKey)
+		if err != nil {
+			return nil, err
+		}
+		recipientKey, err := decodeChallengeB64(challenge.RecipientKeyB64, "recipientKey")
+		if err != nil {
+			return nil, err
 		}
 		sharedSecretToken, ok := token.(ecSharedSecretToken)
 		if !ok {
@@ -121,18 +130,9 @@ func unwrapCDOC2TransportKeyWithToken(token Token, challenge ClientUnwrapChallen
 				sharedSecret[i] = 0
 			}
 		}()
-		recipientKey, err := decodeChallengeB64(challenge.RecipientKeyB64, "recipientKey")
-		if err != nil {
-			return nil, err
-		}
-		kekPm := crypto.HKDFExtractSHA512([]byte(c2.KEKPREMASTER), sharedSecret)
-		defer clear(kekPm)
-		info := []byte(c2.GetSaltForExpandWithKeyMaterial(recipientKey, senderDER))
-		kek, err := crypto.HKDFExpandSHA512(kekPm, info, c2.KeyLen)
-		if err != nil {
-			return nil, internal.NewDecryptionError("failed to derive ECC KEK", err)
-		}
-		return kek, nil
+
+		return c2.DeriveInlineECCKEK(sharedSecret, recipientKey, senderKey)
+
 	default:
 		return nil, internal.NewDecryptionError("unsupported recipient type: "+challenge.RecipientType, nil)
 	}

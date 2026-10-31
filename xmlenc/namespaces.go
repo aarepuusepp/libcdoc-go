@@ -19,4 +19,3 @@ const (
 	// XMLSignature11Prefix is the XML Signature 1.1 namespace prefix
 	XMLSignature11Prefix = "dsig11"
 )
-

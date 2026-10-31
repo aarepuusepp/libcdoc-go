@@ -110,4 +110,3 @@ func NewPKCS11Error(message string, cause error) *PKCS11Error {
 		},
 	}
 }
-

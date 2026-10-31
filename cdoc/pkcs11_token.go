@@ -135,3 +135,11 @@ func (t *PKCS11Token) DecryptECSharedSecret(ephemeralPublicKey *ecdsa.PublicKey)
 func (t *PKCS11Token) DecryptEC(ephemeralPublicKey *ecdsa.PublicKey, algorithmID, partyUInfo, partyVInfo, encryptedKey []byte) ([]byte, error) {
 	return t.DecryptECWithDigest(ephemeralPublicKey, algorithmID, partyUInfo, partyVInfo, encryptedKey, "")
 }
+
+func (t *PKCS11Token) DecryptRSAOAEP(encryptedKey []byte) ([]byte, error) {
+	if t.context == nil {
+		return nil, internal.NewDecryptionError("PKCS#11 context not initialized", nil)
+	}
+
+	return t.context.DecryptRSAOAEP(t.keyHandle, encryptedKey)
+}

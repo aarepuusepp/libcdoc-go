@@ -174,4 +174,3 @@ func TestDecryptAESGCM_InvalidCiphertext(t *testing.T) {
 		t.Error("DecryptAESGCM() with invalid ciphertext should fail")
 	}
 }
-

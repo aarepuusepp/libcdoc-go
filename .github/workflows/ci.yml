@@ -8,16 +8,16 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         go-version: ['1.27.3']
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7.0.1
 
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v7.0.0
       with:
         go-version: ${{ matrix.go-version }}
 
@@ -26,9 +26,11 @@ jobs:
 
     - name: Run gofmt
       run: |
-        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+        mapfile -d '' sources < <(git ls-files -z -- '*.go')
+        unformatted=$(gofmt -s -l "${sources[@]}")
+        if [ -n "$unformatted" ]; then
           echo "The following files need formatting:"
-          gofmt -d .
+          gofmt -d "${sources[@]}"
           exit 1
         fi
 
@@ -39,18 +41,18 @@ jobs:
       run: go test -v -race -coverprofile=coverage.out ./...
 
     - name: Upload coverage
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v7.1.1
       with:
-        file: ./coverage.out
+        files: ./coverage.out
         flags: unittests
 
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7.0.1
 
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v7.0.0
       with:
         go-version-file: go.mod
 
@@ -60,12 +62,12 @@ jobs:
         version: v2.15.0
 
   fuzz:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7.0.1
 
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v7.0.0
       with:
         go-version-file: go.mod
 

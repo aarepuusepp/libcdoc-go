@@ -3,7 +3,7 @@ package cdoc2
 import (
 	"archive/tar"
 	"bytes"
-	"compress/gzip"
+	"compress/zlib"
 	"crypto/rand"
 	"io"
 
@@ -34,8 +34,8 @@ func (w *Writer) WriteEncryptedData(files []DataFile) error {
 		return err
 	}
 
-	// Compress with gzip
-	compressedData, err := compressGzip(tarData)
+	// Compress with zlib
+	compressedData, err := compressZlib(tarData)
 	if err != nil {
 		return err
 	}
@@ -112,17 +112,17 @@ func buildTARArchive(files []DataFile) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// compressGzip compresses data with gzip
-func compressGzip(data []byte) ([]byte, error) {
+// compressZlib compresses data with zlib
+func compressZlib(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
-	gz := gzip.NewWriter(&buf)
+	gz := zlib.NewWriter(&buf)
 
 	if _, err := gz.Write(data); err != nil {
-		return nil, internal.NewEncryptionError("failed to write to gzip", err)
+		return nil, internal.NewEncryptionError("failed to write to zlib", err)
 	}
 
 	if err := gz.Close(); err != nil {
-		return nil, internal.NewEncryptionError("failed to close gzip writer", err)
+		return nil, internal.NewEncryptionError("failed to close zlib writer", err)
 	}
 
 	return buf.Bytes(), nil

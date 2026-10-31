@@ -43,8 +43,8 @@ func TestGenerateDataEncryptionKey(t *testing.T) {
 
 func TestGenerateIV(t *testing.T) {
 	tests := []struct {
-		name      string
-		ivLength  int
+		name     string
+		ivLength int
 	}{
 		{"12 bytes (GCM)", 12},
 		{"16 bytes (CBC)", 16},
@@ -77,4 +77,3 @@ func TestGenerateIV(t *testing.T) {
 		})
 	}
 }
-

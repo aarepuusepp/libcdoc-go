@@ -21,7 +21,7 @@ Go library for Estonian CDOC encryption/decryption supporting CDOC 1.0, 1.1, and
   - Certificate-based (RSA/ECC public keys)
   - Password-based (PBKDF2 with configurable iterations)
   - Symmetric key-based (256-bit keys)
-- **Efficient**: TAR archive packaging with gzip compression
+- **Efficient**: TAR archive packaging with zlib compression
 - **Secure**: HMAC-verified headers and authenticated encryption
 - **Automatic format detection**: Seamlessly handles both CDOC 1.x and CDOC 2.0 formats
 
@@ -398,10 +398,10 @@ No manual format selection is needed - the decrypter handles it automatically.
 ### Security Features
 
 - **Payload Encryption**: ChaCha20-Poly1305 authenticated encryption
-- **Key Derivation**: HKDF (HMAC-based Key Derivation Function) with SHA-256/SHA-512
+- **Key Derivation**: HKDF (HMAC-based Key Derivation Function) with SHA-256 for standard local CDOC2
 - **Header Integrity**: HMAC-SHA256 verification of header data
 - **Key Management**: 
-  - RSA: PKCS#1 v1.5 encryption of KEK
+  - RSA: OAEP with SHA-256/MGF1-SHA256 and an empty label (local CDOC2)
   - ECC: ECDH key agreement with ephemeral keys (secp384r1)
   - Password: PBKDF2 with configurable iterations (default: 100,000)
   - Symmetric: HKDF-based key derivation
@@ -422,7 +422,7 @@ CDOC2 File:
 ├── Header HMAC: SHA-256 HMAC (32 bytes)
 ├── Nonce: 12 bytes (ChaCha20-Poly1305)
 └── Encrypted Payload:
-    ├── Compressed TAR archive (gzip)
+    ├── Compressed TAR archive (zlib)
     └── Contains one or more files
 ```
 
@@ -439,3 +439,31 @@ CDOC2 File:
 
 MIT License
 
+
+
+### Local CDOC2 interoperability (2026-10-31)
+
+Local certificate recipients do not require a key transfer server. New containers
+use TLS uncompressed EC points (P-256/P-384/P-521), HKDF-SHA256, RSA PKCS#1
+public-key encoding with RSA-OAEP-SHA256, and a zlib-compressed TAR payload.
+`PrepareClientUnwrap` accepts the certificate read from the inserted card; a
+CDOC2 container contains public keys, not necessarily certificates.
+Both `FinishClientDecrypt` and direct software/token decryption support this path.
+RSA hardware tokens must implement `DecryptRSAOAEP`; older Token implementations
+still work for CDOC1. NFC ID-card ECDH uses the same CDOC2 challenge path.
+
+Historical libcdoc-go SPKI/SHA512/PKCS1-v1.5 and gzip files remain readable.
+Compatibility is selected by the historical key encoding, never by retrying a
+weaker algorithm after an authentication error. Writers emit the standard local
+format only. Central key-server and SID/MID profiles are separate and are not
+certified by the local interoperability tests.
+
+See `cdoc/testdata/cdoc2-reference/README.md` for independent Open-EID Java
+fixtures, public test-key provenance and licenses. `TestCDOC2IndependentReference`
+checks exact payload hashes, wrong keys and payload tampering;
+`TestCDOC2WriterStandardEncoding` independently decodes new RSA and EC output.
+Real-card CDOC2 acceptance in DigiDoc4 and Digisign remains a separate manual test.
+
+CI formatting checks Git-tracked Go sources with `gofmt -s -l`; the previous failed GitHub run
+stopped at this check before vet/tests. CI now uses Node24-era checkout/setup-go
+and Codecov actions on explicit Ubuntu 24.04 instead of a moving ubuntu-latest.

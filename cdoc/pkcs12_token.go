@@ -101,3 +101,16 @@ func (t *PKCS12Token) DecryptECSharedSecret(ephemeralPublicKey *ecdsa.PublicKey)
 func (t *PKCS12Token) DecryptEC(ephemeralPublicKey *ecdsa.PublicKey, algorithmID, partyUInfo, partyVInfo, encryptedKey []byte) ([]byte, error) {
 	return t.DecryptECWithDigest(ephemeralPublicKey, algorithmID, partyUInfo, partyVInfo, encryptedKey, "")
 }
+
+func (t *PKCS12Token) DecryptRSAOAEP(encryptedKey []byte) ([]byte, error) {
+	if t.keyEntry == nil || t.keyEntry.PrivateKey == nil {
+		return nil, internal.NewDecryptionError("no private key in PKCS#12 token", nil)
+	}
+
+	privKey, ok := t.keyEntry.PrivateKey.RSAPrivateKey()
+	if !ok {
+		return nil, internal.NewDecryptionError("private key is not RSA", nil)
+	}
+
+	return crypto.DecryptRSAOAEP(encryptedKey, privKey)
+}

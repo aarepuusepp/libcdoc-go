@@ -93,4 +93,3 @@ func NewChaCha20Poly1305(key []byte) (cipher.AEAD, error) {
 
 	return chacha20poly1305.New(key)
 }
-

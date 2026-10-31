@@ -83,4 +83,3 @@ func hkdfExpandWithHash(hashFn func() hash.Hash, prk, info []byte, length int) (
 	// Return exactly L bytes
 	return okm[:length], nil
 }
-

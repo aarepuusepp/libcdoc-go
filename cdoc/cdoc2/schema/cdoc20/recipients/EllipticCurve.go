@@ -9,16 +9,22 @@ type EllipticCurve int8
 const (
 	EllipticCurveUNKNOWN   EllipticCurve = 0
 	EllipticCurvesecp384r1 EllipticCurve = 1
+	EllipticCurvesecp256r1 EllipticCurve = 2
+	EllipticCurvesecp521r1 EllipticCurve = 3
 )
 
 var EnumNamesEllipticCurve = map[EllipticCurve]string{
 	EllipticCurveUNKNOWN:   "UNKNOWN",
 	EllipticCurvesecp384r1: "secp384r1",
+	EllipticCurvesecp256r1: "secp256r1",
+	EllipticCurvesecp521r1: "secp521r1",
 }
 
 var EnumValuesEllipticCurve = map[string]EllipticCurve{
 	"UNKNOWN":   EllipticCurveUNKNOWN,
 	"secp384r1": EllipticCurvesecp384r1,
+	"secp256r1": EllipticCurvesecp256r1,
+	"secp521r1": EllipticCurvesecp521r1,
 }
 
 func (v EllipticCurve) String() string {

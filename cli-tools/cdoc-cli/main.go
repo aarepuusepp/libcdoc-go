@@ -274,23 +274,23 @@ func runEncrypt(args []string) {
 func runDecrypt(args []string) {
 	flags := flag.NewFlagSet("decrypt", flag.ExitOnError)
 	var (
-		fileFlag       = flags.String("f", "", "CDOC file to decrypt")
-		keyFlag        = flags.String("k", "", "Private key file (PEM format, for certificate-based decryption)")
-		certFlag       = flags.String("c", "", "Certificate file (optional, for recipient selection)")
-		passwordFlag   = flags.String("p", "", "Password (for CDOC 2.0 password-based decryption)")
-		symmetricFlag  = flags.String("s", "", "Symmetric key file (32 bytes, for CDOC 2.0 symmetric key decryption)")
-		outputFlag     = flags.String("o", ".", "Output directory (default: current directory)")
-		helpFlag       = flags.Bool("h", false, "Show help")
+		fileFlag      = flags.String("f", "", "CDOC file to decrypt")
+		keyFlag       = flags.String("k", "", "Private key file (PEM format, for certificate-based decryption)")
+		certFlag      = flags.String("c", "", "Certificate file (optional, for recipient selection)")
+		passwordFlag  = flags.String("p", "", "Password (for CDOC 2.0 password-based decryption)")
+		symmetricFlag = flags.String("s", "", "Symmetric key file (32 bytes, for CDOC 2.0 symmetric key decryption)")
+		outputFlag    = flags.String("o", ".", "Output directory (default: current directory)")
+		helpFlag      = flags.Bool("h", false, "Show help")
 		// PKCS#12 flags
-		pkcs12Flag     = flags.String("pkcs12", "", "PKCS#12 keystore file (.p12 or .pfx)")
-		p12PassFlag    = flags.String("p12password", "", "PKCS#12 keystore password")
-		p12AliasFlag   = flags.String("p12alias", "", "PKCS#12 key alias (optional)")
+		pkcs12Flag   = flags.String("pkcs12", "", "PKCS#12 keystore file (.p12 or .pfx)")
+		p12PassFlag  = flags.String("p12password", "", "PKCS#12 keystore password")
+		p12AliasFlag = flags.String("p12alias", "", "PKCS#12 key alias (optional)")
 		// PKCS#11 flags
-		pkcs11Flag     = flags.String("pkcs11", "", "Use PKCS#11 token for decryption")
-		p11LibFlag     = flags.String("library", "", "Path to PKCS#11 library (required for --pkcs11)")
-		p11SlotFlag    = flags.Int("slot", 0, "PKCS#11 slot number (default: 0)")
-		p11PinFlag     = flags.String("pin", "", "PKCS#11 token PIN (required for --pkcs11)")
-		p11LabelFlag   = flags.String("label", "", "PKCS#11 key label (optional)")
+		pkcs11Flag   = flags.String("pkcs11", "", "Use PKCS#11 token for decryption")
+		p11LibFlag   = flags.String("library", "", "Path to PKCS#11 library (required for --pkcs11)")
+		p11SlotFlag  = flags.Int("slot", 0, "PKCS#11 slot number (default: 0)")
+		p11PinFlag   = flags.String("pin", "", "PKCS#11 token PIN (required for --pkcs11)")
+		p11LabelFlag = flags.String("label", "", "PKCS#11 key label (optional)")
 	)
 
 	flags.Parse(args)
@@ -419,7 +419,7 @@ func runDecrypt(args []string) {
 	// Write decrypted files
 	for _, decryptedFile := range decryptedFiles {
 		outputPath := filepath.Join(*outputFlag, decryptedFile.Name)
-		
+
 		// Handle file name collisions (like cdoc4j does)
 		basePath := outputPath
 		counter := 1
@@ -447,7 +447,7 @@ func runDecrypt(args []string) {
 // parseList parses a comma-separated list or returns the first argument
 func parseList(value string, args []string) []string {
 	var result []string
-	
+
 	// Check for comma-separated values
 	if strings.Contains(value, ",") {
 		parts := strings.Split(value, ",")

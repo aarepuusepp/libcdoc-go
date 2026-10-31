@@ -47,7 +47,13 @@ func ExtractFMKFromLockWithShares(lock Lock, privateKey interface{}, symmetricKe
 			// RSA: KEK is encrypted with recipient public key
 			if pkcs11Token != nil {
 				// Use PKCS#11 token to decrypt KEK
-				kek, err = pkcs11Token.DecryptRSA(lock.KeyMaterial)
+				if IsLegacySPKI(lock.RecipientKey) {
+					kek, err = pkcs11Token.DecryptRSA(lock.KeyMaterial)
+				} else if oaep, ok := pkcs11Token.(interface{ DecryptRSAOAEP([]byte) ([]byte, error) }); ok {
+					kek, err = oaep.DecryptRSAOAEP(lock.KeyMaterial)
+				} else {
+					return nil, internal.NewDecryptionError("token does not support RSA-OAEP-SHA256", nil)
+				}
 				if err != nil {
 					return nil, internal.NewDecryptionError("failed to decrypt RSA KEK with PKCS#11 token", err)
 				}
@@ -56,21 +62,19 @@ func ExtractFMKFromLockWithShares(lock Lock, privateKey interface{}, symmetricKe
 				if !ok {
 					return nil, internal.NewDecryptionError("private key is not RSA", nil)
 				}
-				kek, err = crypto.DecryptRSA(lock.KeyMaterial, rsaKey)
+				if IsLegacySPKI(lock.RecipientKey) {
+					kek, err = crypto.DecryptRSA(lock.KeyMaterial, rsaKey)
+				} else {
+					kek, err = crypto.DecryptRSAOAEP(lock.KeyMaterial, rsaKey)
+				}
 				if err != nil {
 					return nil, internal.NewDecryptionError("failed to decrypt RSA KEK", err)
 				}
 			}
 		} else if lock.IsECC() {
-			// ECC: ECDH(recipient_priv, sender_pub) => sharedSecret
-			// Sender public key is DER-encoded SubjectPublicKeyInfo
-			pubAny, err := x509.ParsePKIXPublicKey(lock.KeyMaterial)
+			ecPub, err := DecodeECCPublicKey(lock.KeyMaterial)
 			if err != nil {
-				return nil, internal.NewDecryptionError("invalid ECC sender public key", err)
-			}
-			ecPub, ok := pubAny.(*ecdsa.PublicKey)
-			if !ok {
-				return nil, internal.NewDecryptionError("sender public key is not ECC", nil)
+				return nil, err
 			}
 
 			var sharedSecret []byte
@@ -93,14 +97,12 @@ func ExtractFMKFromLockWithShares(lock Lock, privateKey interface{}, symmetricKe
 				}
 			}
 
-			// kek_pm = HKDF-Extract-SHA512(KEKPREMASTER, sharedSecret)
-			kekPm := crypto.HKDFExtractSHA512([]byte(KEKPREMASTER), sharedSecret)
-			// info = KEK + "XOR" + recipient_key + key_material
-			info := []byte(GetSaltForExpandWithKeyMaterial(lock.RecipientKey, lock.KeyMaterial))
-			kek, err = crypto.HKDFExpandSHA512(kekPm, info, KeyLen)
+			defer clear(sharedSecret)
+			kek, err = DeriveInlineECCKEK(sharedSecret, lock.RecipientKey, lock.KeyMaterial)
 			if err != nil {
-				return nil, internal.NewDecryptionError("failed to derive ECC KEK", err)
+				return nil, err
 			}
+
 		} else {
 			return nil, internal.NewDecryptionError("unsupported public key type", nil)
 		}

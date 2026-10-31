@@ -6,26 +6,26 @@ import (
 
 // AgreementMethod represents the AgreementMethod element for ECDH-ES (EC recipients)
 type AgreementMethod struct {
-	XMLName            xml.Name            `xml:"http://www.w3.org/2001/04/xmlenc# AgreementMethod"`
-	Algorithm          string              `xml:"Algorithm,attr"`
+	XMLName             xml.Name             `xml:"http://www.w3.org/2001/04/xmlenc# AgreementMethod"`
+	Algorithm           string               `xml:"Algorithm,attr"`
 	KeyDerivationMethod *KeyDerivationMethod `xml:"http://www.w3.org/2009/xmlenc11# KeyDerivationMethod,omitempty"`
-	OriginatorKeyInfo  *OriginatorKeyInfo  `xml:"http://www.w3.org/2001/04/xmlenc# OriginatorKeyInfo,omitempty"`
-	RecipientKeyInfo   *RecipientKeyInfo   `xml:"http://www.w3.org/2001/04/xmlenc# RecipientKeyInfo,omitempty"`
+	OriginatorKeyInfo   *OriginatorKeyInfo   `xml:"http://www.w3.org/2001/04/xmlenc# OriginatorKeyInfo,omitempty"`
+	RecipientKeyInfo    *RecipientKeyInfo    `xml:"http://www.w3.org/2001/04/xmlenc# RecipientKeyInfo,omitempty"`
 }
 
 // KeyDerivationMethod represents the KeyDerivationMethod element (ConcatKDF)
 type KeyDerivationMethod struct {
-	XMLName          xml.Name          `xml:"http://www.w3.org/2009/xmlenc11# KeyDerivationMethod"`
-	Algorithm        string            `xml:"Algorithm,attr"`
-	ConcatKDFParams  *ConcatKDFParams  `xml:"http://www.w3.org/2009/xmlenc11# ConcatKDFParams,omitempty"`
+	XMLName         xml.Name         `xml:"http://www.w3.org/2009/xmlenc11# KeyDerivationMethod"`
+	Algorithm       string           `xml:"Algorithm,attr"`
+	ConcatKDFParams *ConcatKDFParams `xml:"http://www.w3.org/2009/xmlenc11# ConcatKDFParams,omitempty"`
 }
 
 // ConcatKDFParams represents ConcatKDF parameters
 type ConcatKDFParams struct {
-	XMLName     xml.Name    `xml:"http://www.w3.org/2009/xmlenc11# ConcatKDFParams"`
-	AlgorithmID string      `xml:"AlgorithmID,attr"`
-	PartyUInfo  string      `xml:"PartyUInfo,attr"`
-	PartyVInfo  string      `xml:"PartyVInfo,attr"`
+	XMLName      xml.Name     `xml:"http://www.w3.org/2009/xmlenc11# ConcatKDFParams"`
+	AlgorithmID  string       `xml:"AlgorithmID,attr"`
+	PartyUInfo   string       `xml:"PartyUInfo,attr"`
+	PartyVInfo   string       `xml:"PartyVInfo,attr"`
 	DigestMethod DigestMethod `xml:"http://www.w3.org/2000/09/xmldsig# DigestMethod"`
 }
 
@@ -37,7 +37,7 @@ type DigestMethod struct {
 
 // OriginatorKeyInfo represents the ephemeral public key info
 type OriginatorKeyInfo struct {
-	XMLName  xml.Name `xml:"http://www.w3.org/2001/04/xmlenc# OriginatorKeyInfo"`
+	XMLName  xml.Name  `xml:"http://www.w3.org/2001/04/xmlenc# OriginatorKeyInfo"`
 	KeyValue *KeyValue `xml:"http://www.w3.org/2000/09/xmldsig# KeyValue,omitempty"`
 }
 
@@ -49,7 +49,7 @@ type RecipientKeyInfo struct {
 
 // KeyValue represents the KeyValue element containing EC key
 type KeyValue struct {
-	XMLName   xml.Name   `xml:"http://www.w3.org/2000/09/xmldsig# KeyValue"`
+	XMLName    xml.Name    `xml:"http://www.w3.org/2000/09/xmldsig# KeyValue"`
 	ECKeyValue *ECKeyValue `xml:"http://www.w3.org/2009/xmldsig11# ECKeyValue,omitempty"`
 }
 

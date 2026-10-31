@@ -12,13 +12,13 @@ import (
 )
 
 const (
-	rsaCertPath     = "../../testdata/rsa/auth_cert.pem"
-	eccCertPath     = "../../testdata/ecc/auth_cert.pem"
-	rsaP12Path      = "../../testdata/rsa/rsa.p12"
-	eccP12Path      = "../../testdata/ecc/ecc.p12"
-	p12Password     = "test"
-	testPDFPath     = "../../testdata/samples/TEST-öäüõÖÄÜÕžšŽŠ-01.pdf"
-	testDOCXPath    = "../../testdata/samples/TEST-öäüõÖÄÜÕžšŽŠ-01.docx"
+	rsaCertPath  = "../../testdata/rsa/auth_cert.pem"
+	eccCertPath  = "../../testdata/ecc/auth_cert.pem"
+	rsaP12Path   = "../../testdata/rsa/rsa.p12"
+	eccP12Path   = "../../testdata/ecc/ecc.p12"
+	p12Password  = "test"
+	testPDFPath  = "../../testdata/samples/TEST-öäüõÖÄÜÕžšŽŠ-01.pdf"
+	testDOCXPath = "../../testdata/samples/TEST-öäüõÖÄÜÕžšŽŠ-01.docx"
 )
 
 func main() {
@@ -550,7 +550,7 @@ func getDecryptFolderName(cdocPath string) string {
 	baseName := filepath.Base(cdocPath)
 	ext := filepath.Ext(baseName)
 	nameWithoutExt := baseName[:len(baseName)-len(ext)]
-	
+
 	// Add _CDOC2 suffix for CDOC 2.0 files to avoid overwriting CDOC 1.x folders
 	if ext == ".cdoc2" {
 		return "./decrypted_" + nameWithoutExt + "_CDOC2"

@@ -13,4 +13,3 @@ func EncodeHex(data []byte) string {
 func DecodeHex(s string) ([]byte, error) {
 	return hex.DecodeString(s)
 }
-
