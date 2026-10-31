@@ -60,6 +60,11 @@ func TestCDOC2WriterStandardEncoding(t *testing.T) {
 				t.Fatal(e)
 			}
 			lock := locks[0]
+			// open-eid/libcdoc Lock::isValid also requires a nonempty label.
+			// Crypto-only roundtrips previously missed this DigiDoc4 rejection.
+			if lock.Label == "" || (cert.Subject.CommonName != "" && lock.Label != cert.Subject.CommonName) {
+				t.Fatal("DigiDoc4 recipient label missing or different from certificate CN")
+			}
 			var kek []byte
 			switch key := priv.(type) {
 			case *rsa.PrivateKey:

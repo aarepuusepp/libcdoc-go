@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"strings"
 
 	hdr "github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2/schema/cdoc20/header"
 	rcpt "github.com/aarepuusepp/libcdoc-go/v2/cdoc/cdoc2/schema/cdoc20/recipients"
@@ -46,7 +47,7 @@ type Recipient struct {
 	Certificate   *x509.Certificate // For RSA/ECC recipients
 	Password      string            // For password-based recipients
 	SymmetricKey  []byte            // For symmetric key recipients
-	Label         string            // Optional label
+	Label         string            // Optional display label; derived from the recipient when blank
 	ServerID      string            // For key-server recipients
 	ExpiryTime    uint64            // Optional expiry time
 	KDFIterations int32             // For password-based (PBKDF2)
@@ -134,6 +135,11 @@ func (w *Writer) AddRecipient(recipient Recipient) error {
 		return internal.NewEncryptionError("cannot add recipients after header is written", nil)
 	}
 
+	// DigiDoc4/libcdoc rejects locks with an empty key_label. Apply the
+	// default here so direct Writer users and every Builder path are covered.
+	if strings.TrimSpace(recipient.Label) == "" {
+		recipient.Label = defaultRecipientLabel(recipient)
+	}
 	w.recipients = append(w.recipients, recipient)
 	return nil
 }
