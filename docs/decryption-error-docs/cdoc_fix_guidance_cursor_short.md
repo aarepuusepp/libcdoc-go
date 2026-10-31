@@ -1,3 +1,5 @@
+> Historical investigation/development record. Commands, versions and completion claims describe that record, not the current release. Use [current README](../../README.md) for supported setup and API boundaries.
+
 # Cursor.AI Task Brief — Fix CDOC 1.1 ECC Container Generation in Go
 
 ## Goal

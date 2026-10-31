@@ -18,12 +18,10 @@ cd cli-tools/cdoc-cli
 go build -o cdoc.exe .
 ```
 
-Or install globally (will be available as `cdoc` command):
-```bash
-go install github.com/aarepuusepp/libcdoc-go/v2/cli-tools/cdoc-cli@latest
-```
-
-**Note:** Since `cdoc-cli` has its own `go.mod` file (making it a separate module), it must be built from within the `cli-tools/cdoc-cli` directory or using the `go install` command.
+This is a separate source-checkout module with a replace to the repository root.
+Use Go 1.27.3+ and build from this directory. The root v2.0.8 module tag does not
+publish a separately versioned CLI module; do not assume go install @latest will
+resolve this nested module as the current root release.
 
 ## Usage
 
@@ -143,4 +141,3 @@ cdoc decrypt -f secret.cdoc -k my_private_key.pem -o ./decrypted_files/
 - File name collisions during decryption are handled automatically (appends `_1`, `_2`, etc.)
 - The tool is compatible with CDOC files created by `cdoc4j`
 - For multi-recipient CDOCs, provide the certificate matching your private key using `-c` flag
-

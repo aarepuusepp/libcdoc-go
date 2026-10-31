@@ -28,7 +28,7 @@ This example performs 16 complete test scenarios:
 
 ## Prerequisites
 
-1. Go 1.24.2 or later installed
+1. Go 1.27.3 or later installed (root module requirement)
 2. The library set up using one of the methods from `docs/WINDOWS_TESTING_GUIDE.md`
 3. Test files in place:
    - `testdata/samples/TEST-öäüõÖÄÜÕžšŽŠ-01.pdf` (test PDF with Estonian characters)
@@ -45,13 +45,13 @@ This example performs 16 complete test scenarios:
 cd cli-tools/cdoc-test
 ```
 
-2. The `go.mod` file should already be configured with:
+2. The `go.mod` file can be configured for local development as follows (the checked-in nested module retains older metadata and a local replace):
 ```go
 module cdoc-test
 
-go 1.24.2
+go 1.27.3
 
-require github.com/aarepuusepp/libcdoc-go/v2 v2.0.0
+require github.com/aarepuusepp/libcdoc-go/v2 v2.0.8
 
 replace github.com/aarepuusepp/libcdoc-go/v2 => ../../
 ```

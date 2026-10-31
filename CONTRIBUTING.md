@@ -1,35 +1,20 @@
-# Contributing to cdoc1-go
+# Contributing to libcdoc-go
 
-Thank you for your interest in contributing to cdoc1-go!
+Use Go 1.27.3+, as required by go.mod. Clone this repository/your fork, create a
+branch, and preserve unrelated work. Format changed Go files with gofmt.
 
-## Development Setup
+```sh
+go mod verify
+go test ./...
+go vet ./...
+golangci-lint run
+```
 
-1. Fork the repository
-2. Clone your fork: `git clone https://github.com/yourusername/cdoc1-go.git`
-3. Create a branch: `git checkout -b feature/your-feature`
-4. Make your changes
-5. Run tests: `go test ./...`
-6. Ensure formatting: `gofmt -w .`
-7. Run linting: `golangci-lint run`
-8. Commit your changes: `git commit -am 'Add feature'`
-9. Push to your fork: `git push origin feature/your-feature`
-10. Create a Pull Request
+With CGO and a matching compiler, also run `go test -race ./...`. Nested CLI
+modules have their own builds. Cryptographic changes require independent vectors
+or another implementation, not only an internal roundtrip. Keep synthetic/public
+fixture provenance and licenses. Do not commit local secrets, PIN/CAN or user CDOCs.
 
-## Code Style
-
-- Follow standard Go conventions
-- Use `gofmt` for formatting
-- Run `go vet` before committing
-- Write tests for new functionality
-- Aim for ≥80% code coverage
-
-## Testing
-
-- Unit tests: `go test ./...`
-- Integration tests: `go test -tags=integration ./...`
-- Coverage: `go test -cover ./...`
-
-## Reporting Issues
-
-Please use the GitHub issue tracker to report bugs or request features.
-
+[Windows setup](docs/WINDOWS_TESTING_GUIDE.md), [publishing](docs/PUBLISHING.md).
+Preserve the paired Digisign CDOC2 contract lock and external proof-profile blockers.
+Mock-only results do not establish live RIA interoperability.

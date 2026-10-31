@@ -1,3 +1,5 @@
+> Historical implementation proposal. Its CDOC1/multi-file limitations are superseded by [current implementation status](IMPLEMENTATION_STATUS.md). Do not apply this proposal as a current patch.
+
 # Removing CDOC Library Limitations
 
 This document explains how to remove the two known limitations in the CDOC library:
