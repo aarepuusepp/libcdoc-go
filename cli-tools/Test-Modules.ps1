@@ -52,3 +52,6 @@ try{
  if(!$resolved.StartsWith($temp,[StringComparison]::OrdinalIgnoreCase) -or (Split-Path $resolved -Leaf) -notmatch '^libcdoc-cli-[0-9a-f]{32}$'){throw 'Unexpected temporary test path'}
  Remove-Item -LiteralPath $resolved -Recurse -Force
 }
+# The wrong-key probe intentionally leaves a nonzero native exit code.
+# Return explicit success only after all checks and temporary-file cleanup pass.
+exit 0
